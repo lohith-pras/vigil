@@ -22,8 +22,10 @@ public partial class PanelWindow : Window
         _stats = stats;
         _awake = awake;
         _quit = quit;
-        ApplyTheme();
         InitializeComponent();
+        // After InitializeComponent: XAML loads <Window.Resources> as deferred content, which throws
+        // ("Set property ResourceDictionary.DeferrableContent") if the dictionary already has entries.
+        ApplyTheme();
 
         NetGraph.Label = max => Fmt.Rate(max);
         SystemTab.IsChecked = true; // after InitializeComponent: Tab_Checked needs the pages to exist
