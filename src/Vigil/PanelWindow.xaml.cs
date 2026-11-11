@@ -19,6 +19,7 @@ public partial class PanelWindow : Window
     readonly Action _quit;
     IntPtr _hwnd;
     IReadOnlyList<DiskInfo>? _shownDisks;
+    IReadOnlyList<DeviceBattery>? _shownDevices;
     bool _closing;
 
     /// <summary>Self-test only: force light (true) or dark (false) instead of following Windows.</summary>
@@ -117,6 +118,7 @@ public partial class PanelWindow : Window
 
         RefreshBattery(s.Battery);
         if (!ReferenceEquals(_shownDisks, s.Disks)) RebuildDisks(s.Disks);
+        if (!ReferenceEquals(_shownDevices, s.Devices)) RebuildDevices(s.Devices);
         RefreshAwake();
     }
 
@@ -182,6 +184,36 @@ public partial class PanelWindow : Window
     }
 
     string _shownApps = "\0";
+
+    void RebuildDevices(IReadOnlyList<DeviceBattery> devices)
+    {
+        _shownDevices = devices;
+        DeviceList.Children.Clear();
+        foreach (var d in devices)
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var name = new TextBlock { Text = d.Name, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, ToolTip = d.Name };
+            var bar = new ProgressBar { Style = (Style)FindResource("Bar"), Value = d.Percent };
+            if (d.Percent <= 20) bar.Foreground = (Brush)Resources["Danger"];
+            var pct = new TextBlock { Text = $"{d.Percent}%", Style = (Style)FindResource("Value"), MinWidth = 36 };
+            Grid.SetColumn(bar, 1);
+            Grid.SetColumn(pct, 2);
+            row.Children.Add(name);
+            row.Children.Add(bar);
+            row.Children.Add(pct);
+            DeviceList.Children.Add(row);
+        }
+        if (devices.Count == 0)
+            DeviceList.Children.Add(new TextBlock
+            {
+                Text = "No Bluetooth devices report battery",
+                Style = (Style)FindResource("Muted"),
+            });
+    }
 
     void RefreshAwake()
     {
@@ -389,7 +421,8 @@ public partial class PanelWindow : Window
             brush.Freeze();
             Resources[key] = brush;
         }
-        _shownDisks = null; // rebuild disk rows with the new colours
+        _shownDisks = null; // rebuild rows with the new colours
+        _shownDevices = null;
         if (_hwnd != IntPtr.Zero) ApplyDwmTheme();
     }
 
