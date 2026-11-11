@@ -50,6 +50,30 @@ jobs:
           Get-Content selftest/report.txt
           if ($p.ExitCode -ne 0) { Write-Error "Self-test failed (exit $($p.ExitCode))"; exit 1 }
 
+      # Informational: memory of each build flavour (never blocks a release).
+      - name: Publish (self-contained, uncompressed) for comparison
+        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o out/scu
+
+      - name: Memory test
+        continue-on-error: true
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $variants = [ordered]@{ 'small Vigil.exe' = 'out/fd/Vigil.exe'; 'standalone, compressed' = 'out/sc/Vigil.exe'; 'standalone, uncompressed' = 'out/scu/Vigil.exe' }
+          foreach ($name in $variants.Keys) {
+            $log = Join-Path $pwd "mem.txt"; Remove-Item $log -ErrorAction Ignore
+            $p = Start-Process $variants[$name] -ArgumentList '--memtest', $log -PassThru
+            $samples = @()
+            while (-not $p.HasExited) {
+              $c = Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "IDProcess=$($p.Id)" -ErrorAction Ignore
+              if ($c) { $samples += [int]($c.WorkingSetPrivate / 1MB) }
+              Start-Sleep -Seconds 1
+            }
+            "==== $name ($([math]::Round((Get-Item $variants[$name]).Length / 1MB, 1)) MB on disk)"
+            Get-Content $log -ErrorAction Ignore
+            "Task Manager 'Memory' (private working set) per second: $($samples -join ' ')"
+          }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

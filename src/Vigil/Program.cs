@@ -33,6 +33,7 @@ static class Program
         using var tray = new Tray(app.Shutdown);
         // On a crash, still remove the tray icon and drop keep-awake before the process dies.
         app.DispatcherUnhandledException += (_, _) => tray.Dispose();
+        if (args.Length >= 2 && args[0] == "--memtest") MemTest.Schedule(tray, app, args[1]);
         app.Run();
         return 0;
     }
@@ -125,6 +126,14 @@ sealed class Tray : IDisposable
         if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock)
             _ui.BeginInvoke(() => _awake.Locked = e.Reason == SessionSwitchReason.SessionLock);
     }
+
+    internal void ShowPanelForTest()
+    {
+        _panel ??= new PanelWindow(_stats, _awake, _quit, this);
+        _panel.ShowAt(new System.Drawing.Point(600, 500));
+    }
+
+    internal void HidePanelForTest() => _panel?.Hide();
 
     void TogglePanel()
     {
