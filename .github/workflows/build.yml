@@ -1,0 +1,55 @@
+name: build
+
+# Every push to main builds the exe (download it from the run's Artifacts).
+# Pushing a tag like v0.1.0 also publishes a GitHub Release with both exes.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: echo "VERSION_ARGS=-p:Version=$($env:GITHUB_REF_NAME.TrimStart('v'))" >> $env:GITHUB_ENV
+
+      # Small exe; needs the .NET 10 Desktop Runtime installed.
+      - name: Publish (framework-dependent)
+        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/fd
+
+      # Big exe; runs with nothing installed.
+      - name: Publish (self-contained)
+        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/sc
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item out/fd/Vigil.exe dist/Vigil.exe
+          Copy-Item out/sc/Vigil.exe dist/Vigil-standalone.exe
+          Get-ChildItem dist | Format-Table Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vigil
+          path: dist/
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} dist/Vigil.exe dist/Vigil-standalone.exe --generate-notes
