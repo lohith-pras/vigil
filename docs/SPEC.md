@@ -73,7 +73,31 @@ Tray icon shows CPU % as a number (16×16 / 32×32, readable). Tooltip: one-line
 
 Type names in the app show a SwiftUI panel (`MenuPanelView` + `MenuPanelHeader`) on a glass background (`NSPanel` + `NSVisualEffectView`), anchored under the menu-bar item (`AppDelegate.PanelAnchor`). Content is stacked collapsible cards (`DiskSection`, `NetworkSection`, `KeepAwakeCard`) with history graphs (`MetricHistory`) and usage bars (`DiskUsageBar`). The keep-awake card has duration chips, a countdown, a display-sleep option and an active-state menu-bar icon. Menu-bar metrics are small label-over-value tiles ("CPU / 12%").
 
-Vigil copies that structure: four cards (CPU+RAM, Disk, Network+Battery, Keep awake) on a Mica panel.
+### What the open panel looks like (from screenshots)
+
+- Dark rounded panel (~16 px corners), slightly translucent, with a small caret pointing at the menu-bar icon.
+- App logo centred at the top.
+- **Icon tab bar** under the logo: one icon per section in a rounded pill row; the selected tab gets a blue-tinted square.
+- Section title in small uppercase grey (`SYSTEM`, `KEEP AWAKE`), with a settings-sliders icon on the right.
+- Content sits in one rounded **card**, a shade lighter than the panel, thin subtle border. Sub-headings in bold ("Hardware usage", "Memory"), separated by thin dividers.
+- Metric rows: label left, thin blue progress bar in the middle, bold value right-aligned (`CPU ▬▬▬── 36%`). Below it a line graph with a dashed "100%" ceiling line and a faint gradient fill.
+- Status pills: rounded, tinted badge with a coloured dot (e.g. yellow "Caution").
+- Footer row inside the card with a small icon ("Up for 34d 3h").
+- Bottom: two equal-width rounded buttons, **Settings** and **Quit**.
+- Keep-awake tab: status sentence + large toggle on the first row ("The Mac follows its normal energy rules"); a 4-column grid of duration chips (15m 30m 1h 2h / 4h 8h ∞ Until…); grey hint "Click a chip to start. Click it again to stop"; collapsible "Options"; extra toggle rows with a subtitle.
+
+### Vigil's panel
+
+Same layout, Windows-flavoured:
+
+- Mica/acrylic panel with Win11 rounded corners; no caret (Windows flyouts don't have one).
+- Tab bar with 4 tabs: **Keep awake · System (CPU + RAM) · Network + Battery · Disk**.
+- System tab: CPU row with bar + 60 s graph (dashed 100 % line); RAM row with bar, "9.1 / 16 GB" and %.
+- Disk tab: one bar row per fixed drive, free / total, bar and value turn red above 85 % used.
+- Network + Battery tab: ↓ / ↑ speeds with a small graph; battery %, a "Charging" / "On battery" pill, time remaining.
+- Keep awake tab: status sentence + toggle, chips **30m · 1h · 2h · ∞** (spec presets), countdown while active, "Keep display on" toggle row.
+- Bottom buttons: **Settings** (Start with Windows, Check for updates) and **Quit**.
+- Not copied: temperatures (non-goal), lid-closed option (changes a Windows power setting, out of scope), uptime row (not in spec; trivial to add in v2).
 
 ## Build order
 
