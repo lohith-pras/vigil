@@ -191,11 +191,13 @@
         <!-- Tab bar -->
         <Border Grid.Row="1" CornerRadius="12" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="1" Padding="3">
-            <UniformGrid Columns="4">
+            <UniformGrid Columns="5">
                 <RadioButton x:Name="AwakeTab" Style="{StaticResource Tab}" Content="&#xE708;" Tag="Keep awake"
                              ToolTip="Keep awake" AutomationProperties.Name="Keep awake" Checked="Tab_Checked" />
                 <RadioButton x:Name="SystemTab" Style="{StaticResource Tab}" Content="&#xE7F4;" Tag="System"
                              ToolTip="System" AutomationProperties.Name="System" Checked="Tab_Checked" />
+                <RadioButton x:Name="ProcTab" Style="{StaticResource Tab}" Content="&#xE71D;" Tag="Processes"
+                             ToolTip="Processes" AutomationProperties.Name="Processes" Checked="Tab_Checked" />
                 <RadioButton x:Name="NetTab" Style="{StaticResource Tab}" Content="&#xE774;" Tag="Network &amp; battery"
                              ToolTip="Network &amp; battery" AutomationProperties.Name="Network and battery" Checked="Tab_Checked" />
                 <RadioButton x:Name="DiskTab" Style="{StaticResource Tab}" Content="&#xEDA2;" Tag="Disks"
@@ -332,6 +334,21 @@
                     </Grid>
                     <local:Sparkline x:Name="RamGraph" Height="50" Margin="0,8,0,0"
                                      Stroke="{DynamicResource Teal}" Guide="{DynamicResource SubText}" />
+                </StackPanel>
+
+                <!-- Processes -->
+                <StackPanel x:Name="ProcPage" Visibility="Collapsed">
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Style="{StaticResource Heading}" Text="Top apps" VerticalAlignment="Center" Margin="0" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="SortCpu" Style="{StaticResource Chip}" Content="CPU" MinWidth="54" Click="Sort_Click"
+                                    AutomationProperties.Name="Sort by CPU" />
+                            <Button x:Name="SortRam" Style="{StaticResource Chip}" Content="RAM" MinWidth="54" Click="Sort_Click"
+                                    AutomationProperties.Name="Sort by memory" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel x:Name="ProcList" />
+                    <TextBlock x:Name="ProcStatus" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
 
                 <!-- Network & battery -->

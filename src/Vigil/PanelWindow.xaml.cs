@@ -123,6 +123,113 @@ public partial class PanelWindow : Window
         if (!ReferenceEquals(_shownDisks, s.Disks)) RebuildDisks(s.Disks);
         if (!ReferenceEquals(_shownDevices, s.Devices)) RebuildDevices(s.Devices);
         RefreshAwake();
+        if (ProcTab.IsChecked == true && IsVisible) RefreshProcesses();
+    }
+
+    // ---------- processes ----------
+
+    internal readonly ProcessSampler _procs = new();
+    DateTime _procsAt = DateTime.MinValue;
+    bool _byRam;
+    string? _armed;         // app whose End button was clicked once
+    DateTime _armedAt;
+
+    void RefreshProcesses(bool force = false)
+    {
+        // Sample every 2 s, only while this tab is showing (see ProcessSampler).
+        bool changed = force;
+        if ((DateTime.UtcNow - _procsAt).TotalSeconds >= 2)
+        {
+            _procsAt = DateTime.UtcNow;
+            _procs.Sample();
+            changed = true;
+        }
+        if (_armed is not null && (DateTime.UtcNow - _armedAt).TotalSeconds > 3) { _armed = null; changed = true; }
+        // Rebuild rows only when something changed, so a click never lands on a button that was just replaced.
+        if (!changed) return;
+
+        SortCpu.Style = (Style)FindResource(_byRam ? "Chip" : "ChipOn");
+        SortRam.Style = (Style)FindResource(_byRam ? "ChipOn" : "Chip");
+
+        ProcList.Children.Clear();
+        foreach (var app in _procs.Top(_byRam, 8))
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var name = new TextBlock
+            {
+                Text = app.Count > 1 ? $"{app.Name} ({app.Count})" : app.Name,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = app.Name,
+            };
+            var cpu = new TextBlock
+            {
+                Text = _procs.Measured ? $"{app.Cpu * 100:0.0}%" : "…",
+                Style = (Style)FindResource("Value"),
+                FontWeight = _byRam ? FontWeights.Normal : FontWeights.SemiBold,
+            };
+            var ram = new TextBlock
+            {
+                Text = app.Ram >= 1L << 30 ? $"{app.Ram / (double)(1L << 30):0.0} GB" : $"{app.Ram >> 20} MB",
+                Style = (Style)FindResource("Value"),
+                FontWeight = _byRam ? FontWeights.SemiBold : FontWeights.Normal,
+            };
+            Grid.SetColumn(cpu, 1);
+            Grid.SetColumn(ram, 2);
+            row.Children.Add(name);
+            row.Children.Add(cpu);
+            row.Children.Add(ram);
+
+            if (ProcessSampler.CanEnd(app.Name))
+            {
+                bool armed = _armed == app.Name;
+                var end = new Button
+                {
+                    Style = (Style)FindResource(armed ? "ChipOn" : "Chip"),
+                    Content = armed ? "End?" : "End",
+                    MinWidth = 48,
+                    Margin = new Thickness(8, 0, 0, 0),
+                    Tag = app.Name,
+                    ToolTip = armed ? $"Click again to end {app.Name}" : $"End {app.Name}",
+                };
+                if (armed) end.Background = (Brush)Resources["Danger"];
+                AutomationProperties.SetName(end, $"End {app.Name}");
+                end.Click += EndTask_Click;
+                Grid.SetColumn(end, 3);
+                row.Children.Add(end);
+            }
+            ProcList.Children.Add(row);
+        }
+    }
+
+    void Sort_Click(object sender, RoutedEventArgs e)
+    {
+        _byRam = sender == SortRam;
+        RefreshProcesses(force: true);
+    }
+
+    void EndTask_Click(object sender, RoutedEventArgs e)
+    {
+        string name = (string)((Button)sender).Tag;
+        if (_armed != name)
+        {
+            // Two-step: first click arms for 3 s, second click ends.
+            _armed = name;
+            _armedAt = DateTime.UtcNow;
+            ProcStatus.Text = "";
+        }
+        else
+        {
+            _armed = null;
+            ProcStatus.Text = ProcessSampler.End(name) ?? $"Ended {name}.";
+            _procsAt = DateTime.MinValue; // re-sample now
+        }
+        RefreshProcesses(force: true);
     }
 
     void RefreshBattery(BatteryInfo b)
@@ -312,6 +419,8 @@ public partial class PanelWindow : Window
         AwakePage.Visibility = tab == AwakeTab ? Visibility.Visible : Visibility.Collapsed;
         SystemPage.Visibility = tab == SystemTab ? Visibility.Visible : Visibility.Collapsed;
         NetPage.Visibility = tab == NetTab ? Visibility.Visible : Visibility.Collapsed;
+        ProcPage.Visibility = tab == ProcTab ? Visibility.Visible : Visibility.Collapsed;
+        if (tab == ProcTab) { _procs.Reset(); _procsAt = DateTime.MinValue; RefreshProcesses(); }
         DiskPage.Visibility = tab == DiskTab ? Visibility.Visible : Visibility.Collapsed;
     }
 
