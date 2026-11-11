@@ -1,51 +1,50 @@
 # Vigil
 
-A tiny Windows tray utility that does exactly three things:
+A tiny Windows tray utility, inspired by the macOS menu-bar toolkit Vorssaint.
 
-1. **Tray icon + popup panel**: live CPU % drawn in the tray icon and a compact flyout panel.
-2. **Live system readouts**: CPU (with 60 s sparkline), RAM, disk space per drive, network speed, battery.
-3. **Keep awake**: stop the PC sleeping (and optionally the display turning off), with timer presets.
+- **Tray icon + popup panel**: click the eye icon in the tray for a compact flyout panel. Hover for a one-line summary.
+- **Live readouts**: CPU and RAM (60 s graphs), disk space per drive, network speed, battery, Bluetooth device batteries.
+- **Processes**: top apps by CPU or RAM, with End task.
+- **Keep awake**: stop the PC sleeping (optionally the display too) for 15m–8h, until a time, or indefinitely; only when plugged in, pause when locked, or automatically while chosen apps are open.
 
-Inspired by the macOS menu-bar toolkit Vorssaint, cut down to just these three features.
-
-> **Status:** v0.1 — all three features in, not yet tested on real hardware. "Check for updates" comes next. See [docs/SPEC.md](docs/SPEC.md).
+> **Status:** v0.2. Next: a Displays tab (brightness, refresh rate, display mode). See [docs/SPEC.md](docs/SPEC.md).
 
 ## Download
 
-Grab `Vigil.exe` from the [latest release](https://github.com/lohith-pras/vigil/releases/latest).
-It needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once.
+Grab it from the [latest release](https://github.com/lohith-pras/vigil/releases/latest):
+
+- `Vigil-standalone.exe`: runs with nothing installed (bigger).
+- `Vigil.exe`: small, but needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once.
 
 The exe is not code-signed, so on first run Windows SmartScreen may warn you: click **More info → Run anyway**.
 
 ## Updating
 
-Right-click the tray icon → **Check for updates**. If a newer release exists, Vigil downloads it, swaps itself and restarts.
+Panel → **Settings → Check for updates…** (or right-click the tray icon). If a newer release exists, Vigil downloads it, checks it against the release's checksum, swaps itself and restarts.
 Vigil makes no network calls unless you press that button.
-
-No runtime install? Download `Vigil-standalone.exe` instead (bigger, runs on its own).
 
 ## Build
 
-Windows only (WPF). Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+Windows only to run (WPF); compiles on any OS with the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```powershell
 dotnet run --project src/Vigil                 # run from source
 dotnet publish src/Vigil -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o out
 ```
 
-No SDK? Every push to `main` is built by GitHub Actions: open the latest run under **Actions** and download the `Vigil` artifact.
+Every push to `main` or a `feature/**` branch is built by GitHub Actions, which also runs `Vigil.exe --selftest` on Windows (opens the panel, clicks through everything, saves screenshots). Download the `Vigil` and `selftest` artifacts from the run.
 
 ## Releasing
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
-GitHub Actions builds both exes and publishes them as a release.
+GitHub Actions builds both exes, runs the self-test, and only then publishes the release.
 
 ## Start with Windows
 
-Right-click the tray icon → **Start with Windows**. (Adds Vigil to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; no admin needed.)
+Panel → **Settings → Start with Windows** (or right-click the tray icon). Adds Vigil to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; no admin needed.
 
 ## License
 

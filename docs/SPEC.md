@@ -122,6 +122,8 @@ Built one feature per branch (`feature/…`), each verified by the CI self-test 
 
 Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Network & battery · Disks**.
 
+**Status (v0.2.0):** keep-awake upgrades, Bluetooth batteries, Processes, the tray app icon and Check for updates shipped; **Displays postponed** to a later release (5 tabs for now).
+
 ### 1. Keep-awake upgrades (`feature/keep-awake`)
 
 - More chips: **15m · 30m · 1h · 2h · 4h · 8h · ∞ · Until…** (Until… = pick a clock time; earlier than now means tomorrow).
@@ -148,7 +150,7 @@ Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Networ
 - **End task**: two-step (click → "End?" for 3 s → click again). Ends every process of that name. Shows an error if Windows refuses (e.g. elevated or system processes).
 - Sampled every 2 s **only while this tab is open** (keeps background CPU under 1 %).
 
-### 4. Displays (`feature/displays`)
+### 4. Displays (`feature/displays`) — postponed
 
 - **Displays** tab, one card per screen:
   - Built-in screen: brightness slider (WMI `WmiMonitorBrightness`; needs the `System.Management` package).
@@ -160,3 +162,8 @@ Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Networ
 ### Not in v0.2
 
 GPU usage, alerts, per-core CPU grid, disk activity, battery health, memory-pressure pill, uptime (all discussed; kept for later).
+
+### Added during v0.2 (from 0.1.3 feedback)
+
+- **Tray shows the app icon** instead of the CPU number (the number wasn't understood). Keep-awake adds a green dot. "Show CPU % in tray icon" (Settings / right-click menu) brings the number back.
+- **Check for updates** (Settings / right-click menu): only network call, only on click. Downloads the same flavour that's running, verifies size + SHA-256 from the release, swaps the exe, restarts.
