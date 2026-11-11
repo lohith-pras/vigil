@@ -1,6 +1,7 @@
 using System;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Windows;
@@ -39,6 +40,20 @@ static class SelfTest
             Note($"Battery {stats.Battery}");
             var devices = BluetoothBatteries.Read();
             Check(true, $"Bluetooth battery query ran: {devices.Count} device(s) {string.Join(", ", devices)}");
+
+            // --- processes ---
+            var sampler = new ProcessSampler();
+            sampler.Sample();
+            Thread.Sleep(1000);
+            sampler.Sample();
+            var top = sampler.Top(false, 5).ToList();
+            Check(sampler.Measured && top.Count == 5, $"Process sampler: {sampler.Apps.Count} apps, top CPU {string.Join(", ", top.Select(a => $"{a.Name} {a.Cpu * 100:0.0}%"))}");
+            Check(!ProcessSampler.CanEnd("csrss") && !ProcessSampler.CanEnd(System.Diagnostics.Process.GetCurrentProcess().ProcessName),
+                  "System processes and Vigil itself can't be ended");
+            var victim = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ping", "-n 60 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!;
+            Thread.Sleep(300);
+            string? endError = ProcessSampler.End("PING");
+            Check(endError is null && victim.WaitForExit(5000), "End task ends a process");
 
             // --- keep awake ---
             var awake = new KeepAwake();
@@ -118,7 +133,7 @@ static class SelfTest
                 foreach (var (tab, name) in new[]
                          {
                              (panel.AwakeTab, "1-awake"), (panel.SystemTab, "2-system"),
-                             (panel.NetTab, "3-network"), (panel.DiskTab, "4-disks"),
+                             (panel.ProcTab, "3-processes"), (panel.NetTab, "4-network"), (panel.DiskTab, "5-disks"),
                          })
                 {
                     tab.IsChecked = true;
@@ -135,7 +150,22 @@ static class SelfTest
                     panel.NetTab.IsChecked = true;
                     panel.Refresh();
                     Check(panel.DeviceList.Children.Count == 2, "Bluetooth device rows render");
-                    Save(panel, Path.Combine(dir, "panel-dark-3-network-devices.png"));
+                    Save(panel, Path.Combine(dir, "panel-dark-4-network-devices.png"));
+
+                    panel.ProcTab.IsChecked = true;
+                    panel.Refresh();
+                    Thread.Sleep(2100);
+                    panel.Refresh();
+                    Check(panel.ProcList.Children.Count > 0, "Processes tab lists apps");
+                    var firstEnd = panel.ProcList.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<Button>()).FirstOrDefault();
+                    if (firstEnd is not null)
+                    {
+                        Click(firstEnd); // arm only; never actually end a CI process from the UI
+                        Check(panel.ProcList.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<Button>()).Any(b => (string)b.Content == "End?"),
+                              "End button arms on first click");
+                    }
+                    Click(panel.SortRam);
+                    Save(panel, Path.Combine(dir, "panel-dark-3-processes-ram.png"));
                     stats.Devices = real;
                     panel.Refresh();
                     ClickThrough(panel, awake, dir);
