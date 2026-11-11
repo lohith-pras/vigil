@@ -248,13 +248,13 @@ public partial class PanelWindow : Window
             {
                 ["Bg"] = "#F3F3F3", ["Card"] = "#FFFFFF", ["CardBorder"] = "#E3E3E3", ["Text"] = "#1B1B1B",
                 ["SubText"] = "#6E6E6E", ["Track"] = "#E3E3E3", ["Hover"] = "#ECECEC", ["TabSel"] = "#DCE8FD",
-                ["Chip"] = "#EDEDED",
+                ["ChipBg"] = "#EDEDED",
             }
             : new Dictionary<string, string>
             {
                 ["Bg"] = "#1E1E1E", ["Card"] = "#2A2A2A", ["CardBorder"] = "#3A3A3A", ["Text"] = "#F2F2F2",
                 ["SubText"] = "#9B9B9B", ["Track"] = "#3D3D3D", ["Hover"] = "#343434", ["TabSel"] = "#24385A",
-                ["Chip"] = "#383838",
+                ["ChipBg"] = "#383838",
             };
         palette["Accent"] = "#3B82F6";
         palette["Teal"] = "#2DD4BF";
