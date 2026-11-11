@@ -370,6 +370,11 @@
                         </Border>
                         <TextBlock x:Name="BatTime" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
+
+                    <Border Style="{StaticResource Divider}" />
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Bluetooth devices" />
+                    <StackPanel x:Name="DeviceList" />
                 </StackPanel>
 
                 <!-- Disks -->

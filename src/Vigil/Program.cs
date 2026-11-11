@@ -126,6 +126,7 @@ sealed class Tray : IDisposable
             _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) _panelHiddenAt = DateTime.UtcNow; };
         }
         _stats.RefreshDisks();
+        _stats.RefreshDevices();
         _panel.ShowAt(Forms.Cursor.Position);
     }
 

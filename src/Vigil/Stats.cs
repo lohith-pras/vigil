@@ -25,6 +25,7 @@ sealed class Stats
     public double Down, Up;                  // bytes per second
     public IReadOnlyList<DiskInfo> Disks = Array.Empty<DiskInfo>();
     public BatteryInfo Battery = new(false, 0, true, false, -1);
+    public IReadOnlyList<DeviceBattery> Devices = Array.Empty<DeviceBattery>();
 
     public readonly Queue<double> CpuHistory = new();
     public readonly Queue<double> RamHistory = new();
@@ -47,10 +48,17 @@ sealed class Stats
         SampleNetwork();
         SampleBattery();
         if (_tick % 30 == 0) SampleDisks(); // disk space barely moves; spec allows 30 s
+        if (_tick % 60 == 0) RefreshDevices();
         _tick++;
     }
 
     public void RefreshDisks() => SampleDisks();
+
+    public void RefreshDevices()
+    {
+        try { Devices = BluetoothBatteries.Read(); }
+        catch (Exception) { Devices = Array.Empty<DeviceBattery>(); } // never let a device query take the app down
+    }
 
     void SampleCpu()
     {

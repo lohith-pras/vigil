@@ -37,6 +37,8 @@ static class SelfTest
             Check(stats.Disks.Count > 0, $"Disks: {string.Join(", ", stats.Disks)}");
             Note($"Network ↓ {Fmt.Rate(stats.Down)} ↑ {Fmt.Rate(stats.Up)}");
             Note($"Battery {stats.Battery}");
+            var devices = BluetoothBatteries.Read();
+            Check(true, $"Bluetooth battery query ran: {devices.Count} device(s) {string.Join(", ", devices)}");
 
             // --- keep awake ---
             var awake = new KeepAwake();
@@ -106,7 +108,19 @@ static class SelfTest
                 }
                 Check(true, $"All 4 tabs rendered ({theme})");
 
-                if (!light) ClickThrough(panel, awake, dir);
+                if (!light)
+                {
+                    // No Bluetooth on the CI machine: render fake rows once to check the layout.
+                    var real = stats.Devices;
+                    stats.Devices = new[] { new DeviceBattery("WH-1000XM4", 76), new DeviceBattery("MX Master 3S", 15) };
+                    panel.NetTab.IsChecked = true;
+                    panel.Refresh();
+                    Check(panel.DeviceList.Children.Count == 2, "Bluetooth device rows render");
+                    Save(panel, Path.Combine(dir, "panel-dark-3-network-devices.png"));
+                    stats.Devices = real;
+                    panel.Refresh();
+                    ClickThrough(panel, awake, dir);
+                }
                 panel.Close();
                 DoEvents();
             }
