@@ -40,6 +40,22 @@ jobs:
       - name: Publish (self-contained)
         run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/sc
 
+      # Run the real exe: open the panel, click through everything, screenshot it.
+      # Any exception fails the build, so a broken exe never reaches a release.
+      - name: Self-test
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $p = Start-Process out/sc/Vigil.exe -ArgumentList '--selftest', "$pwd/selftest" -Wait -PassThru
+          Get-Content selftest/report.txt
+          if ($p.ExitCode -ne 0) { Write-Error "Self-test failed (exit $($p.ExitCode))"; exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest
+          path: selftest/
+
       - name: Collect
         shell: pwsh
         run: |

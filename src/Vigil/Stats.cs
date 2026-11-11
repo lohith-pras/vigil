@@ -95,7 +95,10 @@ sealed class Stats
                 rx += s.BytesReceived;
                 tx += s.BytesSent;
             }
-            catch (NetworkInformationException) { _netStamp = 0; } // adapter vanished; re-baseline
+            catch (Exception e) when (e is NetworkInformationException or PlatformNotSupportedException)
+            {
+                _netStamp = 0; // adapter vanished or can't report; re-baseline
+            }
         }
 
         long now = Stopwatch.GetTimestamp();
@@ -142,8 +145,9 @@ sealed class Stats
     void SampleBattery()
     {
         var p = Forms.SystemInformation.PowerStatus;
-        bool present = (p.BatteryChargeStatus & Forms.BatteryChargeStatus.NoSystemBattery) == 0
-                       && (p.BatteryChargeStatus & Forms.BatteryChargeStatus.Unknown) == 0;
+        // Unknown is 255 (every bit set), so it must be compared, not masked.
+        bool present = p.BatteryChargeStatus != Forms.BatteryChargeStatus.Unknown
+                       && (p.BatteryChargeStatus & Forms.BatteryChargeStatus.NoSystemBattery) == 0;
         Battery = new BatteryInfo(
             present,
             Math.Clamp(p.BatteryLifePercent, 0f, 1f),

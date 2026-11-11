@@ -16,6 +16,10 @@ public partial class PanelWindow : Window
     readonly Action _quit;
     IntPtr _hwnd;
     IReadOnlyList<DiskInfo>? _shownDisks;
+    bool _closing;
+
+    /// <summary>Self-test only: force light (true) or dark (false) instead of following Windows.</summary>
+    internal bool? ForceLight { get; set; }
 
     internal PanelWindow(Stats stats, KeepAwake awake, Action quit)
     {
@@ -31,7 +35,9 @@ public partial class PanelWindow : Window
         SystemTab.IsChecked = true; // after InitializeComponent: Tab_Checked needs the pages to exist
 
         SourceInitialized += (_, _) => SetupWindow();
-        Deactivated += (_, _) => Hide();              // click anywhere outside closes the panel
+        Closing += (_, _) => _closing = true;
+        // Click anywhere outside closes the panel. Not while closing: Hide() on a closing window throws.
+        Deactivated += (_, _) => { if (!_closing && IsVisible) Hide(); };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Hide(); };
     }
 
@@ -242,7 +248,7 @@ public partial class PanelWindow : Window
 
     void ApplyTheme()
     {
-        _light = Theme.AppsLight;
+        _light = ForceLight ?? Theme.AppsLight;
         var palette = _light
             ? new Dictionary<string, string>
             {

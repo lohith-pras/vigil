@@ -11,11 +11,14 @@ namespace Vigil;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static int Main(string[] args)
     {
+        // CI only: exercise every screen headlessly, save screenshots, exit non-zero on any error.
+        if (args.Length >= 2 && args[0] == "--selftest") return SelfTest.Run(args[1]);
+
         // One copy only: a second launch just exits.
         using var mutex = new Mutex(true, @"Local\Vigil.SingleInstance", out bool first);
-        if (!first) return;
+        if (!first) return 0;
 
         // No main window: WPF runs until Quit calls Shutdown().
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -23,6 +26,7 @@ static class Program
         // On a crash, still remove the tray icon and drop keep-awake before the process dies.
         app.DispatcherUnhandledException += (_, _) => tray.Dispose();
         app.Run();
+        return 0;
     }
 }
 
@@ -126,32 +130,7 @@ sealed class Tray : IDisposable
         _iconKey = key;
 
         int size = Forms.SystemInformation.SmallIconSize.Width; // 16 at 100 %, 24 at 150 %
-        using var bmp = new Bitmap(size, size);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.Clear(Color.Transparent);
-            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit; // ClearType fringes on a transparent icon
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-
-            // ponytail: 100 % shows as 99 so the number always fits in two digits.
-            string text = Math.Min(cpu, 99).ToString();
-            float px = size * (text.Length == 1 ? 0.9f : 0.78f);
-            using var font = new Font("Segoe UI", px, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
-            using var brush = new SolidBrush(light ? Color.Black : Color.White);
-            using var fmt = (StringFormat)StringFormat.GenericTypographic.Clone();
-            fmt.Alignment = StringAlignment.Center;
-            fmt.LineAlignment = StringAlignment.Center;
-            g.DrawString(text, font, brush, new RectangleF(0, 0, size, size + 1), fmt);
-
-            if (_awake.Active)
-            {
-                // Keep-awake indicator: a blue dot in the top-right corner.
-                float d = size * 0.34f;
-                using var dot = new SolidBrush(Color.FromArgb(0x3B, 0x82, 0xF6));
-                g.FillEllipse(dot, size - d, 0, d, d);
-            }
-        }
-
+        using var bmp = DrawIcon(cpu, _awake.Active, light, size);
         IntPtr hicon = bmp.GetHicon();
         var old = _icon.Icon;
         IntPtr oldHandle = _hicon;
@@ -160,6 +139,34 @@ sealed class Tray : IDisposable
         // Icon.FromHandle doesn't own the HICON: destroy it ourselves or GDI handles leak every redraw.
         old?.Dispose();
         if (oldHandle != IntPtr.Zero) Native.DestroyIcon(oldHandle);
+    }
+
+    /// <summary>CPU % as a number, plus a blue dot while keep-awake is on.</summary>
+    public static Bitmap DrawIcon(int cpu, bool awake, bool lightTaskbar, int size)
+    {
+        var bmp = new Bitmap(size, size);
+        using var g = Graphics.FromImage(bmp);
+        g.Clear(Color.Transparent);
+        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit; // ClearType fringes on a transparent icon
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        // ponytail: 100 % shows as 99 so the number always fits in two digits.
+        string text = Math.Min(cpu, 99).ToString();
+        float px = size * (text.Length == 1 ? 0.9f : 0.78f);
+        using var font = new Font("Segoe UI", px, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
+        using var brush = new SolidBrush(lightTaskbar ? Color.Black : Color.White);
+        using var fmt = (StringFormat)StringFormat.GenericTypographic.Clone();
+        fmt.Alignment = StringAlignment.Center;
+        fmt.LineAlignment = StringAlignment.Center;
+        g.DrawString(text, font, brush, new RectangleF(0, 0, size, size + 1), fmt);
+
+        if (awake)
+        {
+            float d = size * 0.34f;
+            using var dot = new SolidBrush(Color.FromArgb(0x3B, 0x82, 0xF6));
+            g.FillEllipse(dot, size - d, 0, d, d);
+        }
+        return bmp;
     }
 
     void UpdateTooltip()
