@@ -79,6 +79,25 @@ static class SelfTest
             awake.Tick(pluggedIn: true, checkApps: true);
             Check(!awake.Holding, "Watch list empty: released");
 
+            // --- updater: parsing + a real (non-fatal) check against GitHub ---
+            using (var doc = System.Text.Json.JsonDocument.Parse("""
+                {"tag_name":"v9.8.7","html_url":"https://example/r","assets":[
+                  {"name":"Vigil.exe","browser_download_url":"https://example/a","size":123,"digest":"sha256:ABCD"},
+                  {"name":"Vigil-standalone.exe","browser_download_url":"https://example/b","size":456}]}
+                """))
+            {
+                var small = Updater.Parse(doc.RootElement, "Vigil.exe");
+                var big = Updater.Parse(doc.RootElement, "Vigil-standalone.exe");
+                Check(small is { Size: 123, Sha256: "ABCD" } && small.Version == new Version(9, 8, 7)
+                      && big is { AssetUrl: "https://example/b", Sha256: null }, "Update release parsing");
+            }
+            try
+            {
+                var latest = Updater.CheckAsync().GetAwaiter().GetResult();
+                Note($"ok    Update check: running {Updater.Current}, latest {latest?.Version} ({latest?.AssetName}, sha256 {(latest?.Sha256 is null ? "missing" : "present")})");
+            }
+            catch (Exception e) { Note($"warn  Update check failed (network/rate limit?): {e.Message}"); }
+
             // --- tray icon art ---
             SaveIconSheet(Path.Combine(dir, "tray-icons.png"));
             Check(true, "Tray icon drawn at 16/24/32 px, dark + light taskbar");

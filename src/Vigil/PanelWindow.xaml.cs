@@ -392,6 +392,11 @@ public partial class PanelWindow : Window
             var cpu = new MenuItem { Header = "Show CPU % in tray icon", IsCheckable = true, IsChecked = tray.ShowCpuInTray };
             cpu.Click += (_, _) => tray.ToggleCpuInTray();
             menu.Items.Add(cpu);
+            var update = new MenuItem { Header = "Check for updates…" };
+            update.Click += (_, _) => tray.CheckForUpdates();
+            menu.Items.Add(update);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem { Header = $"Vigil {Updater.Current}", IsEnabled = false });
         }
         menu.IsOpen = true;
     }
