@@ -10,6 +10,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- ponytail: placeholder eye icon (exe / Explorer). Swap the file for a real one later. -->
+    <ApplicationIcon>Vigil.ico</ApplicationIcon>
     <!-- WFO0003 wants WinForms' SetHighDpiMode, but WPF owns this process: the manifest is the right place. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
