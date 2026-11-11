@@ -13,8 +13,8 @@ A tiny Windows tray utility, inspired by the macOS menu-bar toolkit Vorssaint.
 
 Grab it from the [latest release](https://github.com/lohith-pras/vigil/releases/latest):
 
-- `Vigil-standalone.exe`: runs with nothing installed (bigger).
-- `Vigil.exe`: small, but needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once.
+- `Vigil-standalone.exe`: runs with nothing installed (≈ 148 MB on disk).
+- `Vigil.exe` (recommended): 0.4 MB, same memory use, smaller updates; needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64), installed once.
 
 The exe is not code-signed, so on first run Windows SmartScreen may warn you: click **More info → Run anyway**.
 
