@@ -136,6 +136,7 @@ sealed class Settings
     public bool PauseWhenLocked { get; set; }
     public bool KeepAwakeOnStartup { get; set; }
     public List<string> WatchApps { get; set; } = new();
+    public bool ShowCpuInTray { get; set; } // false = app icon (default since 0.2)
 
     public void LoadInto(KeepAwake a)
     {

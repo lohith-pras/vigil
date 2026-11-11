@@ -63,13 +63,16 @@ sealed class Tray : IDisposable
         {
             if (_awake.Active) _awake.Stop(); else _awake.Start(null);
         });
+        var cpuItem = new Forms.ToolStripMenuItem("Show CPU % in tray icon", null, (_, _) => ToggleCpuInTray());
         _menu.Items.Add(startItem);
         _menu.Items.Add(awakeItem);
+        _menu.Items.Add(cpuItem);
         _menu.Items.Add(new Forms.ToolStripSeparator());
         _menu.Items.Add("Quit", null, (_, _) => _quit());
         _menu.Opening += (_, _) =>
         {
             startItem.Checked = Startup.Enabled;
+            cpuItem.Checked = _settings.ShowCpuInTray;
             awakeItem.Checked = _awake.Active;
         };
 
@@ -122,7 +125,7 @@ sealed class Tray : IDisposable
 
         if (_panel is null)
         {
-            _panel = new PanelWindow(_stats, _awake, _quit);
+            _panel = new PanelWindow(_stats, _awake, _quit, this);
             _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) _panelHiddenAt = DateTime.UtcNow; };
         }
         _stats.RefreshDisks();
@@ -134,12 +137,13 @@ sealed class Tray : IDisposable
     {
         int cpu = (int)Math.Round(_stats.Cpu * 100);
         bool light = Theme.TaskbarLight;
-        string key = $"{cpu}|{_awake.Holding}|{light}";
+        int? shown = _settings.ShowCpuInTray ? cpu : null;
+        string key = $"{shown}|{_awake.Holding}|{light}";
         if (key == _iconKey) return;
         _iconKey = key;
 
         int size = Forms.SystemInformation.SmallIconSize.Width; // 16 at 100 %, 24 at 150 %
-        using var bmp = DrawIcon(cpu, _awake.Holding, light, size);
+        using var bmp = DrawIcon(shown, _awake.Holding, light, size);
         IntPtr hicon = bmp.GetHicon();
         var old = _icon.Icon;
         IntPtr oldHandle = _hicon;
@@ -150,8 +154,20 @@ sealed class Tray : IDisposable
         if (oldHandle != IntPtr.Zero) Native.DestroyIcon(oldHandle);
     }
 
-    /// <summary>CPU % as a number, plus a blue dot while keep-awake is on.</summary>
-    public static Bitmap DrawIcon(int cpu, bool awake, bool lightTaskbar, int size)
+    public void ToggleCpuInTray()
+    {
+        _settings.ShowCpuInTray = !_settings.ShowCpuInTray;
+        _settings.Save();
+        RenderIcon();
+    }
+
+    public bool ShowCpuInTray => _settings.ShowCpuInTray;
+
+    /// <summary>
+    /// Tray icon: the app icon (cpu = null) or CPU % as a number. While keep-awake holds, a dot:
+    /// green with a taskbar-coloured ring on the app icon, blue top-right on the number.
+    /// </summary>
+    public static Bitmap DrawIcon(int? cpu, bool awake, bool lightTaskbar, int size)
     {
         var bmp = new Bitmap(size, size);
         using var g = Graphics.FromImage(bmp);
@@ -159,8 +175,26 @@ sealed class Tray : IDisposable
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit; // ClearType fringes on a transparent icon
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
+        if (cpu is null)
+        {
+            using (var stream = typeof(Tray).Assembly.GetManifestResourceStream("Vigil.ico")!)
+            using (var appIcon = new Icon(stream, size, size)) // picks the closest size from the .ico
+            using (var art = appIcon.ToBitmap())
+                g.DrawImage(art, 0, 0, size, size);
+
+            if (awake)
+            {
+                float d = size * 0.5f, ring = Math.Max(1.5f, size / 12f);
+                using var bg = new SolidBrush(lightTaskbar ? Color.FromArgb(0xF3, 0xF3, 0xF3) : Color.FromArgb(0x1C, 0x1C, 0x1C));
+                using var dot = new SolidBrush(Color.FromArgb(0x22, 0xC5, 0x5E));
+                g.FillEllipse(bg, size - d - ring / 2, size - d - ring / 2, d + ring, d + ring);
+                g.FillEllipse(dot, size - d + ring / 2, size - d + ring / 2, d - ring, d - ring);
+            }
+            return bmp;
+        }
+
         // ponytail: 100 % shows as 99 so the number always fits in two digits.
-        string text = Math.Min(cpu, 99).ToString();
+        string text = Math.Min(cpu.Value, 99).ToString();
         float px = size * (text.Length == 1 ? 0.9f : 0.78f);
         using var font = new Font("Segoe UI", px, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
         using var brush = new SolidBrush(lightTaskbar ? Color.Black : Color.White);

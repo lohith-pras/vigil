@@ -25,8 +25,11 @@ public partial class PanelWindow : Window
     /// <summary>Self-test only: force light (true) or dark (false) instead of following Windows.</summary>
     internal bool? ForceLight { get; set; }
 
-    internal PanelWindow(Stats stats, KeepAwake awake, Action quit)
+    readonly Tray? _tray;
+
+    internal PanelWindow(Stats stats, KeepAwake awake, Action quit, Tray? tray = null)
     {
+        _tray = tray;
         _stats = stats;
         _awake = awake;
         _quit = quit;
@@ -384,6 +387,12 @@ public partial class PanelWindow : Window
             Placement = System.Windows.Controls.Primitives.PlacementMode.Top,
         };
         menu.Items.Add(startup);
+        if (_tray is { } tray)
+        {
+            var cpu = new MenuItem { Header = "Show CPU % in tray icon", IsCheckable = true, IsChecked = tray.ShowCpuInTray };
+            cpu.Click += (_, _) => tray.ToggleCpuInTray();
+            menu.Items.Add(cpu);
+        }
         menu.IsOpen = true;
     }
 
