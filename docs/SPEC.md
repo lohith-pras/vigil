@@ -115,3 +115,48 @@ Same layout, Windows-flavoured:
 6. Start with Windows + settings file (`%APPDATA%\Vigil\settings.json`).
 7. Check for updates + GitHub Actions release workflow.
 8. Polish: theme, sparkline, red drive highlight.
+
+## v0.2 (agreed 2026-11-11)
+
+Built one feature per branch (`feature/…`), each verified by the CI self-test on Windows, then merged into `main`. No tag / release until explicitly asked.
+
+Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Network & battery · Disks**.
+
+### 1. Keep-awake upgrades (`feature/keep-awake`)
+
+- More chips: **15m · 30m · 1h · 2h · 4h · 8h · ∞ · Until…** (Until… = pick a clock time; earlier than now means tomorrow).
+- Collapsible **Options**:
+  - Keep display on (existing).
+  - **Only when plugged in**: on battery the request is paused, resumes when plugged back in.
+  - **Pause when locked**: paused while the PC is locked (Win+L), resumes on unlock.
+  - **Turn on when Vigil starts**: indefinite keep-awake at launch.
+  - **While these apps are open**: list of apps (picked from running apps); while any runs, keep awake applies automatically, even if the manual toggle is off.
+- Status line says why it's on or paused ("because OBS is open", "paused: on battery").
+- Tray dot shows only while the PC is actually being held awake.
+- All options saved in `settings.json`.
+
+### 2. Bluetooth device batteries (`feature/bt-batteries`)
+
+- In Network & battery tab, under Battery: **Devices** section, one row per Bluetooth device that reports a battery level to Windows (name, bar, %).
+- Source: the Windows device property Settings uses (`{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2`) via SetupAPI. No admin, no driver, no network.
+- Refreshed every 60 s and when the panel opens. Devices that report nothing are hidden; if none: "No Bluetooth devices report battery".
+- Limits: only what Windows itself shows; value can lag until the device reports again.
+
+### 3. Processes + End task (`feature/processes`)
+
+- **Processes** tab: top apps by CPU (toggle: by RAM), grouped by name with instance count, CPU % and RAM.
+- **End task**: two-step (click → "End?" for 3 s → click again). Ends every process of that name. Shows an error if Windows refuses (e.g. elevated or system processes).
+- Sampled every 2 s **only while this tab is open** (keeps background CPU under 1 %).
+
+### 4. Displays (`feature/displays`)
+
+- **Displays** tab, one card per screen:
+  - Built-in screen: brightness slider (WMI `WmiMonitorBrightness`; needs the `System.Management` package).
+  - External monitors: brightness, contrast, speaker volume via **DDC/CI** (`dxva2.dll`). Monitors that don't answer show "This monitor doesn't support control". Calls run off the UI thread.
+  - Refresh rate buttons for the screen's current resolution (e.g. **60 Hz · 144 Hz**).
+- Below the cards: display mode **Extend · Duplicate · Laptop only · External only** (`SetDisplayConfig`, same as Win+P), and **Turn screens off** (until mouse/keyboard).
+- Not doing: input switching (can blank the screen), dimming below minimum, night light, resolution changes.
+
+### Not in v0.2
+
+GPU usage, alerts, per-core CPU grid, disk activity, battery health, memory-pressure pill, uptime (all discussed; kept for later).
