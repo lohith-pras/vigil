@@ -67,7 +67,9 @@ Tray icon shows CPU % as a number (16×16 / 32×32, readable). Tooltip: one-line
 |---|---|---|
 | .NET 8 | .NET 10 | .NET 8 support ended 10 Nov 2026; .NET 10 is the current LTS. |
 | No network calls, no auto-updater | One exception: **Check for updates** button in the right-click menu. Only runs when clicked. Queries GitHub Releases, downloads the new exe, swaps it in, restarts. | So a friend can update without re-downloading by hand. Nothing runs in the background. |
-| WinForms | **Proposed:** WPF (Fluent theme, Mica) for the panel; tray via `NotifyIcon`. Fall back to WinForms if idle RAM breaks 50 MB. | Closer to the Vorssaint look (glass, rounded cards). Not decided yet. |
+| WinForms | **WPF** (.NET 10, Fluent theme, Mica) for the panel; tray via WinForms `NotifyIcon` (`UseWindowsForms` alongside WPF). Fall back to WinForms if idle RAM breaks 50 MB at build step 1. | Closer to the Vorssaint look (glass, rounded cards, smooth toggles). |
+
+**Build note:** WPF only compiles on Windows. Releases are built by GitHub Actions (`windows-latest`); local dev/debug happens on the Windows laptop.
 
 ## Design reference: Vorssaint (observed from its shipped binary, v3.4.4)
 
