@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Drawing.Text;
 using System.Threading;
 using System.Windows;
@@ -17,9 +18,15 @@ static class Program
         // CI only: exercise every screen headlessly, save screenshots, exit non-zero on any error.
         if (args.Length >= 2 && args[0] == "--selftest") return SelfTest.Run(args[1]);
 
-        // One copy only: a second launch just exits.
-        using var mutex = new Mutex(true, @"Local\Vigil.SingleInstance", out bool first);
+        // One copy only: a second launch just exits. After an update ("--updated") the new exe
+        // waits for the old one to quit and release the mutex instead.
+        using var mutex = new Mutex(false, @"Local\Vigil.SingleInstance");
+        bool updated = args.Contains("--updated");
+        bool first;
+        try { first = mutex.WaitOne(updated ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
+        catch (AbandonedMutexException) { first = true; } // previous copy exited without releasing
         if (!first) return 0;
+        Updater.CleanUp();
 
         // No main window: WPF runs until Quit calls Shutdown().
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -64,9 +71,11 @@ sealed class Tray : IDisposable
             if (_awake.Active) _awake.Stop(); else _awake.Start(null);
         });
         var cpuItem = new Forms.ToolStripMenuItem("Show CPU % in tray icon", null, (_, _) => ToggleCpuInTray());
+        var updateItem = new Forms.ToolStripMenuItem("Check for updates…", null, (_, _) => CheckForUpdates());
         _menu.Items.Add(startItem);
         _menu.Items.Add(awakeItem);
         _menu.Items.Add(cpuItem);
+        _menu.Items.Add(updateItem);
         _menu.Items.Add(new Forms.ToolStripSeparator());
         _menu.Items.Add("Quit", null, (_, _) => _quit());
         _menu.Opening += (_, _) =>
@@ -162,6 +171,52 @@ sealed class Tray : IDisposable
     }
 
     public bool ShowCpuInTray => _settings.ShowCpuInTray;
+
+    bool _updating;
+
+    /// <summary>Only network call in the app, and only on click.</summary>
+    public async void CheckForUpdates()
+    {
+        if (_updating) return;
+        _updating = true;
+        _panel?.Hide();
+        var current = Updater.Current;
+        Release? release = null;
+        try
+        {
+            _icon.Text = "Vigil: checking for updates…";
+            release = await Updater.CheckAsync();
+            if (release is null || release.Version <= current)
+            {
+                Ask($"Vigil {current} is up to date.", Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+                return;
+            }
+            var answer = Ask($"Vigil {release.Version} is available (you have {current}).\n\n" +
+                             $"Download it ({release.Size / 1048576.0:0.#} MB) and restart now?",
+                             Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Information);
+            if (answer != Forms.DialogResult.Yes) return;
+
+            _icon.Text = $"Vigil: downloading {release.Version}…";
+            await Updater.InstallAsync(release);
+            _quit(); // the new exe is starting and waits for this one to exit
+        }
+        catch (Exception e)
+        {
+            var answer = Ask($"Couldn't update: {e.Message}\n\nOpen the download page instead?",
+                             Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Warning);
+            if (answer == Forms.DialogResult.Yes) Updater.OpenReleasesPage();
+        }
+        finally
+        {
+            _updating = false;
+            UpdateTooltip();
+        }
+    }
+
+    static Forms.DialogResult Ask(string text, Forms.MessageBoxButtons buttons, Forms.MessageBoxIcon icon) =>
+        // DefaultDesktopOnly keeps the box in front: a tray app has no window to own it.
+        Forms.MessageBox.Show(text, "Vigil", buttons, icon, Forms.MessageBoxDefaultButton.Button1,
+                              Forms.MessageBoxOptions.DefaultDesktopOnly);
 
     /// <summary>
     /// Tray icon: the app icon (cpu = null) or CPU % as a number. While keep-awake holds, a dot:
