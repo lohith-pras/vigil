@@ -42,10 +42,40 @@ static class SelfTest
             var awake = new KeepAwake();
             awake.Start(TimeSpan.FromMinutes(30));
             Check(awake.Active && awake.Remaining > TimeSpan.Zero, "Keep awake 30 min starts with time remaining");
-            awake.Tick();
-            Check(awake.Active, "Keep awake still active after a tick");
+            awake.Tick(pluggedIn: true, checkApps: true);
+            Check(awake.Active && awake.Holding, "Keep awake still holding after a tick");
             awake.Stop();
-            Check(!awake.Active, "Keep awake stops");
+            Check(!awake.Active && !awake.Holding, "Keep awake stops");
+
+            awake.StartUntil(DateTime.Now.AddHours(2).TimeOfDay);
+            Check(awake.UntilTime is not null && awake.Remaining > TimeSpan.FromHours(1.9), "Until… starts with ~2 h left");
+            awake.StartUntil(DateTime.Now.AddMinutes(-5).TimeOfDay);
+            Check(awake.Remaining > TimeSpan.FromHours(23), "Until… with a past time means tomorrow");
+            awake.Stop();
+
+            awake.OnlyWhenPluggedIn = true;
+            awake.Start(null);
+            awake.Tick(pluggedIn: false, checkApps: false);
+            Check(awake.Wanted && !awake.Holding && awake.PausedReason == "on battery", "Only when plugged in: pauses on battery");
+            awake.Tick(pluggedIn: true, checkApps: false);
+            Check(awake.Holding, "Only when plugged in: resumes when plugged in");
+            awake.OnlyWhenPluggedIn = false;
+
+            awake.PauseWhenLocked = true;
+            awake.Locked = true;
+            Check(!awake.Holding && awake.PausedReason == "PC is locked", "Pause when locked: pauses");
+            awake.Locked = false;
+            Check(awake.Holding, "Pause when locked: resumes on unlock");
+            awake.PauseWhenLocked = false;
+            awake.Stop();
+
+            string self = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+            awake.WatchApps.Add(self);
+            awake.Tick(pluggedIn: true, checkApps: true);
+            Check(!awake.Active && awake.Holding && awake.RunningApp == self, $"Watched app '{self}' running holds awake");
+            awake.WatchApps.Clear();
+            awake.Tick(pluggedIn: true, checkApps: true);
+            Check(!awake.Holding, "Watch list empty: released");
 
             // --- tray icon art ---
             SaveIconSheet(Path.Combine(dir, "tray-icons.png"));
@@ -101,6 +131,7 @@ static class SelfTest
 
         foreach (Button chip in panel.Chips.Children)
         {
+            if ((string)chip.Tag == "until") continue; // tested below
             Click(chip);
             Check(awake.Active, $"Chip '{chip.Content}' starts keep awake");
             panel.Refresh();
@@ -108,6 +139,44 @@ static class SelfTest
             Click(chip);
             Check(!awake.Active, $"Chip '{chip.Content}' clicked again stops keep awake");
         }
+
+        var until = (Button)panel.Chips.Children[^1];
+        Click(until);
+        Check(panel.UntilRow.Visibility == Visibility.Visible && panel.UntilBox.Text.Length == 5, $"Until… shows time box ('{panel.UntilBox.Text}')");
+        panel.UntilBox.Text = "nonsense";
+        Click(panel.UntilStart);
+        Check(!awake.Active && panel.UntilError.Text.Length > 0, "Until… rejects a bad time");
+        panel.UntilBox.Text = DateTime.Now.AddHours(3).ToString("HH:mm");
+        Click(panel.UntilStart);
+        Check(awake.Active && awake.UntilTime is not null, "Until… starts");
+        panel.Refresh();
+        Save(panel, Path.Combine(dir, "panel-dark-1-awake-until.png"));
+        Click(until);
+        Check(!awake.Active, "Until chip clicked again stops");
+
+        Click(panel.OptionsToggle);
+        foreach (var sw in new[] { panel.PluggedSwitch, panel.LockedSwitch, panel.StartupSwitch })
+        {
+            sw.IsChecked = true;
+            Click(sw);
+        }
+        Check(awake.OnlyWhenPluggedIn && awake.PauseWhenLocked && awake.OnAtStartup, "Option switches set options");
+        awake.WatchApps.Add("obs64");
+        awake.Touch();
+        panel.Refresh();
+        Check(panel.AppList.Children.Count == 2, "App list shows watched app + Add button");
+        Save(panel, Path.Combine(dir, "panel-dark-1-awake-options.png"));
+        Click((Button)panel.AppList.Children[^1]); // "+ Add app" menu
+        DoEvents();
+        Click((Button)panel.AppList.Children[0]);  // remove obs64
+        panel.Refresh();
+        Check(awake.WatchApps.Count == 0 && panel.AppList.Children.Count == 1, "Removing watched app");
+        foreach (var sw in new[] { panel.PluggedSwitch, panel.LockedSwitch, panel.StartupSwitch })
+        {
+            sw.IsChecked = false;
+            Click(sw);
+        }
+        Click(panel.OptionsToggle);
 
         panel.AwakeSwitch.IsChecked = true;
         Click(panel.AwakeSwitch);

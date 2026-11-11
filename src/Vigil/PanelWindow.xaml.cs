@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Windows.Automation;
+using System.Windows.Controls.Primitives;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -178,19 +181,84 @@ public partial class PanelWindow : Window
             DiskList.Children.Add(new TextBlock { Text = "No fixed drives found", Style = (Style)FindResource("Muted") });
     }
 
+    string _shownApps = "\0";
+
     void RefreshAwake()
     {
-        AwakeSwitch.IsChecked = _awake.Active;
-        DisplaySwitch.IsChecked = _awake.DisplayOn;
-        AwakeStatus.Text = !_awake.Active ? "PC follows its normal power settings"
-            : _awake.Remaining is { } r ? $"Keeping PC awake · {Fmt.Duration(r)} left"
+        var a = _awake;
+        AwakeSwitch.IsChecked = a.Active;
+        DisplaySwitch.IsChecked = a.DisplayOn;
+        PluggedSwitch.IsChecked = a.OnlyWhenPluggedIn;
+        LockedSwitch.IsChecked = a.PauseWhenLocked;
+        StartupSwitch.IsChecked = a.OnAtStartup;
+
+        AwakeStatus.Text =
+            a.PausedReason is { } why ? $"Keep awake paused: {why}"
+            : !a.Wanted ? "PC follows its normal power settings"
+            : !a.Active ? $"Keeping PC awake while {a.RunningApp} is open"
+            : a.UntilTime is { } t ? $"Keeping PC awake until {t:HH:mm} · {Fmt.Duration(a.Remaining ?? TimeSpan.Zero)} left"
+            : a.Remaining is { } r ? $"Keeping PC awake · {Fmt.Duration(r)} left"
             : "Keeping PC awake until you turn it off";
 
         foreach (Button chip in Chips.Children)
         {
-            bool on = _awake.Active && ChipDuration(chip) == _awake.Duration;
+            bool on = (string)chip.Tag == "until"
+                ? a.Active && a.UntilTime is not null
+                : a.Active && a.UntilTime is null && ChipDuration(chip) == a.Duration;
             chip.Style = (Style)FindResource(on ? "ChipOn" : "Chip");
         }
+
+        string apps = string.Join("|", a.WatchApps);
+        if (apps != _shownApps) RebuildAppList(apps);
+    }
+
+    void RebuildAppList(string key)
+    {
+        _shownApps = key;
+        AppList.Children.Clear();
+        foreach (var name in _awake.WatchApps)
+        {
+            var chip = new Button
+            {
+                Style = (Style)FindResource("Chip"),
+                Content = $"{name}  ✕",
+                Tag = name,
+                Padding = new Thickness(12, 0, 12, 0),
+                ToolTip = $"Remove {name}",
+            };
+            AutomationProperties.SetName(chip, $"Remove {name}");
+            chip.Click += (_, _) => { _awake.WatchApps.Remove(name); _awake.Touch(); };
+            AppList.Children.Add(chip);
+        }
+        var add = new Button { Style = (Style)FindResource("Chip"), Content = "+ Add app", MinWidth = 90 };
+        add.Click += AddApp_Click;
+        AppList.Children.Add(add);
+    }
+
+    void AddApp_Click(object sender, RoutedEventArgs e)
+    {
+        // Apps with a window right now, by process name (what Windows matches on).
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                if (p.MainWindowHandle != IntPtr.Zero && p.Id != Environment.ProcessId) names.Add(p.ProcessName);
+            }
+            catch (InvalidOperationException) { } // exited meanwhile
+            finally { p.Dispose(); }
+        }
+        names.ExceptWith(_awake.WatchApps);
+
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
+        foreach (var name in names)
+        {
+            var item = new MenuItem { Header = name };
+            item.Click += (_, _) => { _awake.WatchApps.Add(name); _awake.Touch(); };
+            menu.Items.Add(item);
+        }
+        if (names.Count == 0) menu.Items.Add(new MenuItem { Header = "No other apps open", IsEnabled = false });
+        menu.IsOpen = true;
     }
 
     static TimeSpan? ChipDuration(Button chip)
@@ -214,7 +282,25 @@ public partial class PanelWindow : Window
 
     void Chip_Click(object sender, RoutedEventArgs e)
     {
-        var duration = ChipDuration((Button)sender);
+        var button = (Button)sender;
+        if ((string)button.Tag == "until")
+        {
+            if (_awake.Active && _awake.UntilTime is not null) { _awake.Stop(); return; }
+            bool show = UntilRow.Visibility != Visibility.Visible;
+            UntilRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (show)
+            {
+                // Suggest the next half hour at least an hour away.
+                var t = DateTime.Now.AddHours(1);
+                t = t.Date.AddHours(t.Hour).AddMinutes(t.Minute < 30 ? 30 : 60);
+                UntilBox.Text = t.ToString("HH:mm");
+                UntilError.Text = "";
+                UntilBox.Focus();
+                UntilBox.SelectAll();
+            }
+            return;
+        }
+        var duration = ChipDuration(button);
         if (_awake.Active && _awake.Duration == duration) _awake.Stop(); // same chip again = stop
         else _awake.Start(duration);
     }
@@ -225,7 +311,36 @@ public partial class PanelWindow : Window
         else _awake.Stop();
     }
 
-    void DisplaySwitch_Click(object sender, RoutedEventArgs e) => _awake.DisplayOn = DisplaySwitch.IsChecked == true;
+    void UntilStart_Click(object sender, RoutedEventArgs e)
+    {
+        if (TimeSpan.TryParse(UntilBox.Text.Trim(), out var time) && time >= TimeSpan.Zero && time < TimeSpan.FromDays(1))
+        {
+            UntilError.Text = "";
+            UntilRow.Visibility = Visibility.Collapsed;
+            _awake.StartUntil(time);
+        }
+        else UntilError.Text = "Use HH:mm, e.g. 18:30";
+    }
+
+    void Option_Click(object sender, RoutedEventArgs e)
+    {
+        var box = (CheckBox)sender;
+        bool on = box.IsChecked == true;
+        switch ((string)box.Tag)
+        {
+            case "display": _awake.DisplayOn = on; break;
+            case "plugged": _awake.OnlyWhenPluggedIn = on; break;
+            case "locked": _awake.PauseWhenLocked = on; break;
+            case "startup": _awake.OnAtStartup = on; _awake.Touch(); break;
+        }
+    }
+
+    void OptionsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool show = OptionsPanel.Visibility != Visibility.Visible;
+        OptionsPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OptionsToggle.Content = (show ? "⌄  " : "›  ") + "Options";
+    }
 
     void Settings_Click(object sender, RoutedEventArgs e)
     {

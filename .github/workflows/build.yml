@@ -4,7 +4,7 @@ name: build
 # Pushing a tag like v0.1.0 also publishes a GitHub Release with both exes.
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:

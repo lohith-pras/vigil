@@ -4,6 +4,7 @@ using System.Drawing.Text;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
 namespace Vigil;
@@ -39,6 +40,7 @@ sealed class Tray : IDisposable
     readonly KeepAwake _awake = new();
     readonly Settings _settings = Settings.Load();
     readonly Action _quit;
+    readonly Dispatcher _ui = Dispatcher.CurrentDispatcher;
 
     PanelWindow? _panel;
     DateTime _panelHiddenAt;
@@ -50,8 +52,10 @@ sealed class Tray : IDisposable
     public Tray(Action quit)
     {
         _quit = quit;
-        _awake.DisplayOn = _settings.KeepDisplayOn;
+        _settings.LoadInto(_awake);
+        if (_awake.OnAtStartup) _awake.Start(null);
         Startup.FixPath();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
 
         _menu = new Forms.ContextMenuStrip();
         var startItem = new Forms.ToolStripMenuItem("Start with Windows", null, (_, _) => Startup.Enabled = !Startup.Enabled);
@@ -74,11 +78,7 @@ sealed class Tray : IDisposable
 
         _awake.Changed += () =>
         {
-            if (_settings.KeepDisplayOn != _awake.DisplayOn)
-            {
-                _settings.KeepDisplayOn = _awake.DisplayOn;
-                _settings.Save();
-            }
+            if (_settings.CopyFrom(_awake)) _settings.Save();
             RenderIcon();
             _panel?.Refresh();
         };
@@ -97,13 +97,21 @@ sealed class Tray : IDisposable
     void OnTick()
     {
         _stats.Sample();
-        _awake.Tick();
+        // ponytail: battery state from the 1 s sample; app list re-checked every 5 s.
+        _awake.Tick(pluggedIn: _stats.Battery.PluggedIn || !_stats.Battery.Present, checkApps: _tick % 5 == 0);
         if (_tick++ % 2 == 0)
         {
             RenderIcon();
             UpdateTooltip();
         }
         if (_panel?.IsVisible == true) _panel.Refresh();
+    }
+
+    void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        // SystemEvents may raise this on its own thread; KeepAwake must be touched on the UI thread.
+        if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock)
+            _ui.BeginInvoke(() => _awake.Locked = e.Reason == SessionSwitchReason.SessionLock);
     }
 
     void TogglePanel()
@@ -125,12 +133,12 @@ sealed class Tray : IDisposable
     {
         int cpu = (int)Math.Round(_stats.Cpu * 100);
         bool light = Theme.TaskbarLight;
-        string key = $"{cpu}|{_awake.Active}|{light}";
+        string key = $"{cpu}|{_awake.Holding}|{light}";
         if (key == _iconKey) return;
         _iconKey = key;
 
         int size = Forms.SystemInformation.SmallIconSize.Width; // 16 at 100 %, 24 at 150 %
-        using var bmp = DrawIcon(cpu, _awake.Active, light, size);
+        using var bmp = DrawIcon(cpu, _awake.Holding, light, size);
         IntPtr hicon = bmp.GetHicon();
         var old = _icon.Icon;
         IntPtr oldHandle = _hicon;
@@ -174,7 +182,7 @@ sealed class Tray : IDisposable
         var s = _stats;
         string text = $"CPU {s.Cpu * 100:0}% · RAM {Fmt.Gb(s.RamUsed)}/{s.RamTotal / 1073741824.0:0} GB · ↓ {Fmt.Rate(s.Down)} ↑ {Fmt.Rate(s.Up)}";
         if (s.Battery.Present) text += $" · 🔋 {s.Battery.Percent * 100:0}%";
-        if (_awake.Active) text += " · awake";
+        if (_awake.Holding) text += " · awake";
         if (text.Length > 127) text = text[..127]; // NotifyIcon limit
         if (_icon.Text != text) _icon.Text = text;
     }
@@ -184,7 +192,10 @@ sealed class Tray : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
-        if (_awake.Active) _awake.Stop();
+        SystemEvents.SessionSwitch -= OnSessionSwitch; // static event: unsubscribe or it leaks
+        // Back to normal power rules. Direct call, not _awake.Stop(): that would fire Changed and
+        // could save a "stopped" state over the user's options during shutdown.
+        Native.SetThreadExecutionState(Native.ES_CONTINUOUS);
         _panel?.Close();
         // Hide + dispose removes the icon at once instead of leaving a "ghost" until hovered.
         _icon.Visible = false;

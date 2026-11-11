@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Vigil"
-        Title="Vigil" Width="340" Height="490"
+        Title="Vigil" Width="340" Height="540"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
@@ -124,6 +124,31 @@
             <Setter Property="Foreground" Value="White" />
         </Style>
 
+        <Style x:Key="Link" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource ChipBg}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6,5" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
         <Style x:Key="Footer" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource Card}" />
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
@@ -183,8 +208,9 @@
 
         <!-- Card holding the selected page -->
         <Border Grid.Row="3" CornerRadius="10" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardBorder}"
-                BorderThickness="1" Padding="14">
-            <Grid>
+                BorderThickness="1" Padding="14,14,14,6">
+            <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
+            <Grid Margin="0,0,0,8">
                 <!-- Keep awake -->
                 <StackPanel x:Name="AwakePage" Visibility="Collapsed">
                     <Grid>
@@ -197,27 +223,82 @@
                                   AutomationProperties.Name="Keep awake" Click="AwakeSwitch_Click" />
                     </Grid>
                     <UniformGrid x:Name="Chips" Columns="4" Margin="-3,12,-3,0">
+                        <Button Style="{StaticResource Chip}" Tag="15" Content="15m" Click="Chip_Click" />
                         <Button Style="{StaticResource Chip}" Tag="30" Content="30m" Click="Chip_Click" />
                         <Button Style="{StaticResource Chip}" Tag="60" Content="1h" Click="Chip_Click" />
                         <Button Style="{StaticResource Chip}" Tag="120" Content="2h" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="0" Content="∞" Click="Chip_Click"
-                                AutomationProperties.Name="Indefinitely" />
+                        <Button Style="{StaticResource Chip}" Tag="240" Content="4h" Click="Chip_Click" />
+                        <Button Style="{StaticResource Chip}" Tag="480" Content="8h" Click="Chip_Click" />
+                        <Button Style="{StaticResource Chip}" Tag="0" Content="∞" Click="Chip_Click" AutomationProperties.Name="Indefinitely" />
+                        <Button Style="{StaticResource Chip}" Tag="until" Content="Until…" Click="Chip_Click" />
                     </UniformGrid>
+                    <StackPanel x:Name="UntilRow" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
+                        <TextBlock Text="Until" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="UntilBox" Style="{StaticResource Field}" Width="70"
+                                 AutomationProperties.Name="Until time, hours and minutes" />
+                        <Button x:Name="UntilStart" Style="{StaticResource Chip}" Content="Start" Padding="14,0"
+                                Click="UntilStart_Click" Margin="8,0,0,0" MinWidth="64" />
+                        <TextBlock x:Name="UntilError" Foreground="{DynamicResource Danger}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </StackPanel>
                     <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0"
                                Text="Click a chip to start. Click it again to stop." />
                     <Border Style="{StaticResource Divider}" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Keep display on" />
-                            <TextBlock Style="{StaticResource Muted}" Text="Applied whenever Keep awake is active" />
-                        </StackPanel>
-                        <CheckBox x:Name="DisplaySwitch" Grid.Column="1" Style="{StaticResource Switch}"
-                                  AutomationProperties.Name="Keep display on" Click="DisplaySwitch_Click" />
-                    </Grid>
+                    <Button x:Name="OptionsToggle" Style="{StaticResource Link}" Content="›  Options"
+                            HorizontalAlignment="Left" Click="OptionsToggle_Click" />
+                    <StackPanel x:Name="OptionsPanel" Visibility="Collapsed" Margin="0,12,0,0">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock Text="Keep display on" />
+                                <TextBlock Style="{StaticResource Muted}" Text="Applied whenever Keep awake is active" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <CheckBox x:Name="DisplaySwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="display"
+                                      AutomationProperties.Name="Keep display on" Click="Option_Click" />
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock Text="Only when plugged in" />
+                                <TextBlock Style="{StaticResource Muted}" Text="Pauses while on battery" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <CheckBox x:Name="PluggedSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="plugged"
+                                      AutomationProperties.Name="Only when plugged in" Click="Option_Click" />
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock Text="Pause when locked" />
+                                <TextBlock Style="{StaticResource Muted}" Text="Pauses while the PC is locked (Win+L)" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <CheckBox x:Name="LockedSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="locked"
+                                      AutomationProperties.Name="Pause when locked" Click="Option_Click" />
+                        </Grid>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock Text="Turn on when Vigil starts" />
+                                <TextBlock Style="{StaticResource Muted}" Text="Starts indefinitely at launch" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <CheckBox x:Name="StartupSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="startup"
+                                      AutomationProperties.Name="Turn on when Vigil starts" Click="Option_Click" />
+                        </Grid>
+                        <TextBlock Text="While these apps are open" />
+                        <TextBlock Style="{StaticResource Muted}" Text="Keep awake turns on by itself" />
+                        <WrapPanel x:Name="AppList" Margin="-3,6,-3,0" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- System -->
@@ -297,6 +378,7 @@
                     <StackPanel x:Name="DiskList" />
                 </StackPanel>
             </Grid>
+            </ScrollViewer>
         </Border>
 
         <!-- Footer -->
