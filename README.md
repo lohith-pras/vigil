@@ -8,7 +8,7 @@ A tiny Windows tray utility that does exactly three things:
 
 Inspired by the macOS menu-bar toolkit Vorssaint, cut down to just these three features.
 
-> **Status:** early. Step 1 of 8 done (tray icon + Quit). Features below arrive step by step; see [docs/SPEC.md](docs/SPEC.md).
+> **Status:** v0.1 — all three features in, not yet tested on real hardware. "Check for updates" comes next. See [docs/SPEC.md](docs/SPEC.md).
 
 ## Download
 

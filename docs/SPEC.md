@@ -67,9 +67,13 @@ Tray icon shows CPU % as a number (16×16 / 32×32, readable). Tooltip: one-line
 |---|---|---|
 | .NET 8 | .NET 10 | .NET 8 support ended 10 Nov 2026; .NET 10 is the current LTS. |
 | No network calls, no auto-updater | One exception: **Check for updates** button in the right-click menu. Only runs when clicked. Queries GitHub Releases, downloads the new exe, swaps it in, restarts. | So a friend can update without re-downloading by hand. Nothing runs in the background. |
-| WinForms | **WPF** (.NET 10, Fluent theme, Mica) for the panel; tray via WinForms `NotifyIcon` (`UseWindowsForms` alongside WPF). Fall back to WinForms if idle RAM breaks 50 MB at build step 1. | Closer to the Vorssaint look (glass, rounded cards, smooth toggles). |
+| WinForms | **WPF** (.NET 10; own dark/light palette following the Windows setting, Win11 rounded corners; Mica glass is a later polish) for the panel; tray via WinForms `NotifyIcon` (`UseWindowsForms` alongside WPF). Fall back to WinForms if idle RAM breaks 50 MB at build step 1. | Closer to the Vorssaint look (glass, rounded cards, smooth toggles). |
+| Refresh 1 s open / 2–3 s background | Sample everything every 1 s; tray icon + tooltip redraw every 2 s (only when the value changes) | One timer instead of two; sampling is a few cheap system calls, and the 60 s sparkline always has full data. |
+| CPU % in icon | Capped at 99 | Three digits don't fit legibly in a 16 px icon. |
+| Keep-awake on restart | Always starts off; only "Keep display on" is remembered | A forgotten keep-awake could stop the laptop sleeping in a bag. |
+| Panel positioned at the icon | Positioned at the click point, against the taskbar edge of that monitor | WinForms doesn't expose the tray icon's rectangle; the click point is the icon. |
 
-**Build note:** WPF only compiles on Windows. Releases are built by GitHub Actions (`windows-latest`); local dev/debug happens on the Windows laptop.
+**Build note:** WPF builds from macOS/Linux too (`EnableWindowsTargeting`), so the code can be compile-checked anywhere. Releases are built by GitHub Actions (`windows-latest`); running and debugging needs Windows.
 
 ## Design reference: Vorssaint (observed from its shipped binary, v3.4.4)
 
