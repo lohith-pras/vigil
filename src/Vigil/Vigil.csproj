@@ -15,7 +15,6 @@
     <!-- WFO0003 wants WinForms' SetHighDpiMode, but WPF owns this process: the manifest is the right place. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <Version>0.1.3</Version>
     <Product>Vigil</Product>
