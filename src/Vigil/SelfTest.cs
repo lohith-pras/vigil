@@ -267,14 +267,15 @@ static class SelfTest
         int[] sizes = { 16, 24, 32 };
         const int zoom = 4, pad = 16;
         int cell = 32 * zoom + pad;
-        using var sheet = new System.Drawing.Bitmap(cell * 6, cell * 2);
+        using var sheet = new System.Drawing.Bitmap(cell * 6, cell * 4);
         using var g = System.Drawing.Graphics.FromImage(sheet);
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.PixelOffsetMode = PixelOffsetMode.Half;
 
-        for (int row = 0; row < 2; row++)
+        // Rows: app icon dark/light taskbar, then CPU-number mode dark/light.
+        for (int row = 0; row < 4; row++)
         {
-            bool light = row == 1;
+            bool light = row % 2 == 1, number = row >= 2;
             using var bg = new System.Drawing.SolidBrush(light ? System.Drawing.Color.FromArgb(0xEE, 0xEE, 0xEE)
                                                                : System.Drawing.Color.FromArgb(0x1C, 0x1C, 0x1C));
             g.FillRectangle(bg, 0, row * cell, sheet.Width, cell);
@@ -282,7 +283,7 @@ static class SelfTest
             foreach (int size in sizes)
             foreach (bool awake in new[] { false, true })
             {
-                using var icon = Tray.DrawIcon(awake ? 7 : 42, awake, light, size);
+                using var icon = Tray.DrawIcon(number ? (awake ? 7 : 42) : null, awake, light, size);
                 g.DrawImage(icon, col * cell + pad / 2, row * cell + pad / 2, size * zoom, size * zoom);
                 col++;
             }

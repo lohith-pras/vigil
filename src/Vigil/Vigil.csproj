@@ -20,4 +20,9 @@
     <Product>Vigil</Product>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Also drawn as the tray icon. -->
+    <EmbeddedResource Include="Vigil.ico" LogicalName="Vigil.ico" />
+  </ItemGroup>
+
 </Project>
