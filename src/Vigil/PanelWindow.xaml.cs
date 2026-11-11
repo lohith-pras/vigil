@@ -119,7 +119,7 @@ public partial class PanelWindow : Window
 
     void RefreshBattery(BatteryInfo b)
     {
-        BatBar.Value = b.Percent * 100;
+        BatBar.Value = b.Present ? b.Percent * 100 : 0;
         BatPct.Text = b.Present ? $"{b.Percent * 100:0}%" : "—";
 
         (string text, string color) = !b.Present ? ("No battery", "SubText")
