@@ -28,11 +28,16 @@ static class Program
         if (!first) return 0;
         Updater.CleanUp();
 
+        // Draw with the CPU, not the GPU: the panel is simple, and GPU rendering loads the graphics
+        // drivers into the process (~100+ MB on a laptop with AMD + NVIDIA) and can wake the dGPU.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+
         // No main window: WPF runs until Quit calls Shutdown().
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         using var tray = new Tray(app.Shutdown);
         // On a crash, still remove the tray icon and drop keep-awake before the process dies.
         app.DispatcherUnhandledException += (_, _) => tray.Dispose();
+        if (args.Length >= 2 && args[0] == "--memtest") MemTest.Schedule(tray, app, args[1]);
         app.Run();
         return 0;
     }
@@ -126,6 +131,36 @@ sealed class Tray : IDisposable
             _ui.BeginInvoke(() => _awake.Locked = e.Reason == SessionSwitchReason.SessionLock);
     }
 
+    DispatcherTimer? _trim;
+
+    void OnPanelHidden()
+    {
+        _panelHiddenAt = DateTime.UtcNow;
+        // A few seconds after the panel closes, give its memory back to Windows (unless it reopened).
+        _trim ??= new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
+        {
+            _trim!.Stop();
+            if (_panel?.IsVisible == true) return;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            Native.SetProcessWorkingSetSize(Native.GetCurrentProcess(), new IntPtr(-1), new IntPtr(-1));
+        }, _ui);
+        _trim.Stop();
+        _trim.Start();
+    }
+
+    internal void ShowPanelForTest()
+    {
+        if (_panel is null)
+        {
+            _panel = new PanelWindow(_stats, _awake, _quit, this);
+            _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
+        }
+        _panel.ShowAt(new System.Drawing.Point(600, 500));
+    }
+
+    internal void HidePanelForTest() => _panel?.Hide();
+
     void TogglePanel()
     {
         // Clicking the tray icon first deactivates (and hides) an open panel; don't reopen it right away.
@@ -135,7 +170,7 @@ sealed class Tray : IDisposable
         if (_panel is null)
         {
             _panel = new PanelWindow(_stats, _awake, _quit, this);
-            _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) _panelHiddenAt = DateTime.UtcNow; };
+            _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
         }
         _stats.RefreshDisks();
         _stats.RefreshDevices();
