@@ -36,9 +36,10 @@ jobs:
       - name: Publish (framework-dependent)
         run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/fd
 
-      # Big exe; runs with nothing installed.
+      # Big exe; runs with nothing installed. Not compressed: compression unpacks the whole
+      # bundle into RAM at start (measured: 86 MB idle vs 10 MB uncompressed).
       - name: Publish (self-contained)
-        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/sc
+        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/sc
 
       # Run the real exe: open the panel, click through everything, screenshot it.
       # Any exception fails the build, so a broken exe never reaches a release.
@@ -51,15 +52,12 @@ jobs:
           if ($p.ExitCode -ne 0) { Write-Error "Self-test failed (exit $($p.ExitCode))"; exit 1 }
 
       # Informational: memory of each build flavour (never blocks a release).
-      - name: Publish (self-contained, uncompressed) for comparison
-        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o out/scu
-
       - name: Memory test
         continue-on-error: true
         shell: pwsh
         timeout-minutes: 4
         run: |
-          $variants = [ordered]@{ 'small Vigil.exe' = 'out/fd/Vigil.exe'; 'standalone, compressed' = 'out/sc/Vigil.exe'; 'standalone, uncompressed' = 'out/scu/Vigil.exe' }
+          $variants = [ordered]@{ 'small Vigil.exe' = 'out/fd/Vigil.exe'; 'standalone' = 'out/sc/Vigil.exe' }
           foreach ($name in $variants.Keys) {
             $log = Join-Path $pwd "mem.txt"; Remove-Item $log -ErrorAction Ignore
             $p = Start-Process $variants[$name] -ArgumentList '--memtest', $log -PassThru
