@@ -175,6 +175,18 @@ To keep merges small while the design pass rewrites `PanelWindow.xaml`: each new
 
 As specified in v0.2 §4 above: per-screen cards (built-in brightness via WMI; external brightness / contrast / volume via DDC/CI), refresh-rate buttons, display mode (Extend · Duplicate · PC screen only · Second screen only via `SetDisplayConfig`), Turn screens off.
 
+How it was built (and where it differs):
+- Tab order: Keep awake · **Displays** · System · Processes · Network & battery · Disks. Displays takes the monitor glyph (`E7F4`); System moves to `E9D9`.
+- One block per screen inside the page card (not one card each), so it sits inside the panel's existing single-card layout.
+- Built-in panel: WMI gives brightness without saying which screen it is. If exactly one screen doesn't answer DDC/CI, that screen gets the brightness slider and is titled "Built-in display". Otherwise a separate "Built-in display" block with brightness only.
+- Refresh-rate chips only appear when the current resolution has more than one rate; otherwise the rate is shown next to the resolution.
+- Display mode chips highlight the current Win+P mode (read with `QueryDisplayConfig`).
+- Turn screens off waits 500 ms so the click itself doesn't wake them.
+- DDC reads are tried twice (real monitors drop the odd reply); writes leave 50 ms between commands (`Displays.DdcGapMs`).
+- Screens are read when the tab opens and monitor handles are released when it closes (tab switch or panel hide). Nothing is polled in the background.
+- Self-test is read-only: it loads the real displays (CI's virtual display has no DDC/WMI, so it shows the unsupported state), then renders a made-up layout (DDC monitor, silent monitor, laptop card). It never changes mode, refresh rate, brightness or screen power.
+- Only real hardware can verify: DDC/CI on actual monitors, WMI brightness on the laptop panel, 144 Hz switching, Win+P mode switching, screens off.
+
 ### 2. Battery health (`feature/battery-alerts-speedtest`)
 
 - In the battery section: **health %** = full-charge capacity ÷ design capacity, both in mWh, plus **charge cycles** if the battery reports them.
