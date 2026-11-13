@@ -26,6 +26,7 @@ sealed class Stats
     public IReadOnlyList<DiskInfo> Disks = Array.Empty<DiskInfo>();
     public BatteryInfo Battery = new(false, 0, true, false, -1);
     public IReadOnlyList<DeviceBattery> Devices = Array.Empty<DeviceBattery>();
+    public BatteryHealth? Health;            // read on panel open only (RefreshHealth)
 
     public readonly Queue<double> CpuHistory = new();
     public readonly Queue<double> RamHistory = new();
@@ -58,6 +59,12 @@ sealed class Stats
     {
         try { Devices = BluetoothBatteries.Read(); }
         catch (Exception) { Devices = Array.Empty<DeviceBattery>(); } // never let a device query take the app down
+    }
+
+    public void RefreshHealth()
+    {
+        try { Health = BatteryHealth.Read(); }
+        catch (Exception) { Health = null; } // a driver query must never take the app down
     }
 
     void SampleCpu()

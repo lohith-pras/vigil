@@ -42,6 +42,18 @@ static class SelfTest
             var devices = BluetoothBatteries.Read();
             Check(true, $"Bluetooth battery query ran: {devices.Count} device(s) {string.Join(", ", devices)}");
 
+            // --- battery health (CI has no battery: the query must just not crash) ---
+            stats.RefreshHealth();
+            Check(true, $"Battery health query ran: {stats.Health?.Text ?? "no battery / not reported"}");
+            Check(BatteryHealth.FromInfo(0, 50_000, 45_000, 312)?.Text == "Health 90% · 312 cycles"
+                  && BatteryHealth.FromInfo(0, 50_000, 45_000, 0)?.Text == "Health 90%"
+                  && BatteryHealth.FromInfo(0, 50_000, 45_000, 0xFFFFFFFF)?.Cycles == 0
+                  && BatteryHealth.FromInfo(0x40000000, 100, 100, 5) is null
+                  && BatteryHealth.FromInfo(0, 0, 45_000, 5) is null
+                  && BatteryHealth.FromInfo(0, 50_000, 0xFFFFFFFF, 5) is null, "Battery health: values, relative/unknown hidden");
+
+            AlertChecks();
+
             // --- processes ---
             var sampler = new ProcessSampler();
             sampler.Sample();
@@ -114,6 +126,25 @@ static class SelfTest
             }
             catch (Exception e) { Note($"warn  Update check failed (network/rate limit?): {e.Message}"); }
 
+            // --- speed test: one tiny real run (non-fatal, like the update check) ---
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var tiny = new SpeedTest.Plan(3, new[] { 100_000L, 1_000_000L }, new[] { 100_000L, 500_000L }, 5);
+                var r = SpeedTest.RunAsync(tiny, null, cts.Token).GetAwaiter().GetResult();
+                Note($"ok    Speed test (tiny): ↓ {r.DownMbps:0.0} Mbps ↑ {r.UpMbps:0.0} Mbps, ping {r.PingMs:0} ms");
+                if (r.DownMbps <= 0 || r.UpMbps <= 0 || r.PingMs <= 0) Note("warn  Speed test returned a zero value");
+            }
+            catch (Exception e) { Note($"warn  Speed test failed (network?): {e.GetBaseException().Message}"); }
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1));
+                SpeedTest.RunAsync(SpeedTest.Full, null, cts.Token).GetAwaiter().GetResult();
+                Check(false, "Speed test cancels");
+            }
+            catch (OperationCanceledException) { Check(true, "Speed test cancels"); }
+            Check(SpeedTest.Full.MaxBytes is > 30_000_000 and < 100_000_000, $"Speed test data cap {SpeedTest.Full.MaxBytes / 1_000_000} MB");
+
             // --- tray icon art ---
             SaveIconSheet(Path.Combine(dir, "tray-icons.png"));
             Check(true, "Tray icon drawn at 16/24/32 px, dark + light taskbar");
@@ -154,6 +185,32 @@ static class SelfTest
                     panel.Refresh();
                     Check(panel.DeviceList.Children.Count == 2, "Bluetooth device rows render");
                     Save(panel, Path.Combine(dir, "panel-dark-4-network-devices.png"));
+
+                    // Speed test result, battery health and the alerts block, on a tall render of the whole tab.
+                    var realHealth = stats.Health;
+                    stats.Health = new BatteryHealth(50_000, 43_100, 312);
+                    var realBattery = stats.Battery;
+                    stats.Battery = new BatteryInfo(true, 0.76, false, false, 9000);
+                    panel.SpeedTestBlock.ShowResult(new SpeedTest.Result(14, 245.3, 38.7));
+                    var alertSettings = new Settings();
+                    panel.AlertsBlock.Bind(alertSettings, () => { });
+                    Click(panel.AlertsBlock.Toggle);
+                    panel.AlertsBlock.ChargedSwitch.IsChecked = true;
+                    Click(panel.AlertsBlock.ChargedSwitch);
+                    Click((Button)panel.AlertsBlock.Limits.Children[0]);
+                    panel.AlertsBlock.BusySwitch.IsChecked = false;
+                    Click(panel.AlertsBlock.BusySwitch);
+                    Check(alertSettings is { AlertCharged: true, ChargeLimit: 80, AlertBusy: false, AlertBatteryLow: true, AlertDiskFull: true },
+                          "Alerts switches and charge limit set settings");
+                    panel.Refresh();
+                    Check(panel.BatHealth.Visibility == Visibility.Visible && panel.BatHealth.Text == "Health 86% · 312 cycles",
+                          $"Battery health shows ('{panel.BatHealth.Text}')");
+                    double h = panel.Height;
+                    panel.Height = 1180;
+                    Save(panel, Path.Combine(dir, "panel-dark-4-network-full.png"));
+                    panel.Height = h;
+                    stats.Health = realHealth;
+                    stats.Battery = realBattery;
 
                     panel.ProcTab.IsChecked = true;
                     panel.Refresh();
@@ -251,6 +308,60 @@ static class SelfTest
 
     static IEnumerable<string> Texts(DependencyObject o) =>
         Descendants(o).OfType<TextBlock>().Select(t => t.Text).Concat(Descendants(o).OfType<ContentControl>().Select(c => c.Content as string ?? ""));
+
+
+    /// <summary>Alert rules as pure checks: fake readings in, fire once, re-arm only after the condition clears.</summary>
+    static void AlertChecks()
+    {
+        var defaults = System.Text.Json.JsonSerializer.Deserialize<Settings>("{}")!;
+        Check(defaults is { AlertBatteryLow: true, AlertCharged: false, ChargeLimit: 100, AlertDiskFull: true, AlertBusy: true },
+              "Alert defaults (old settings.json): all on except battery charged");
+
+        var cfg = new Settings();
+        var alerts = new Alerts(cfg);
+        var ok = new[] { new DiskInfo("C:", "", 50L << 30, 100L << 30) };
+        var full = new[] { new DiskInfo("C:", "", 5L << 30, 100L << 30) };
+        var none = new BatteryInfo(false, 0, true, false, -1);
+        static BatteryInfo Bat(double pct, bool plugged) => new(true, pct, plugged, plugged, -1);
+        string Fire(BatteryInfo b, DiskInfo[] d, double cpu = 0.1, double ram = 0.1) =>
+            string.Join(" + ", alerts.Check(b, d, cpu, ram).Select(a => a.Title));
+
+        Check(Fire(Bat(0.5, false), ok) == "", "Alerts: quiet at normal readings");
+        Check(Fire(Bat(0.2, false), ok) == "Battery low", "Battery low fires at 20%");
+        Check(Fire(Bat(0.19, false), ok) == "", "Battery low fires only once");
+        Check(Fire(Bat(0.1, false), ok) == "Battery very low", "Battery very low fires at 10%");
+        Check(Fire(Bat(0.09, true), ok) == "", "Plugged in: no low alert; charged alert off by default");
+        Check(Fire(Bat(0.15, false), ok) == "Battery low", "Battery low re-arms after plugging in");
+        Check(Fire(Bat(0.08, false), ok) == "Battery very low", "Battery very low re-arms too");
+
+        cfg.AlertCharged = true;
+        cfg.ChargeLimit = 80;
+        Check(Fire(Bat(0.79, true), ok) == "", "Charged: not below the limit");
+        Check(Fire(Bat(0.8, true), ok) == "Battery charged", "Charged fires at the 80% limit while plugged in");
+        Check(Fire(Bat(0.85, true), ok) == "", "Charged fires only once");
+        Check(Fire(Bat(0.85, false), ok) == "" && Fire(Bat(0.85, true), ok) == "Battery charged", "Charged re-arms after unplugging");
+        cfg.AlertCharged = false;
+
+        Check(Fire(none, full) == "Drive C: almost full", "Drive above 90% fires");
+        Check(Fire(none, full) == "", "Drive alert fires only once");
+        Check(Fire(none, ok) == "" && Fire(none, full) == "Drive C: almost full", "Drive alert re-arms after space is freed");
+        cfg.AlertDiskFull = false;
+        Check(Fire(none, ok) == "" && Fire(none, full) == "", "Drive alert off: silent");
+
+        string busy = "";
+        for (int i = 0; i < Alerts.BusySeconds - 1; i++) busy += Fire(none, ok, cpu: 0.95);
+        Check(busy == "", "CPU busy: silent before 2 minutes");
+        Check(Fire(none, ok, cpu: 0.95) == "CPU busy", "CPU busy fires after 2 minutes above 90%");
+        Check(Fire(none, ok, cpu: 0.95) == "", "CPU busy fires only once");
+        Fire(none, ok, cpu: 0.5);
+        for (int i = 0; i < Alerts.BusySeconds - 1; i++) busy += Fire(none, ok, cpu: 0.95, ram: 0.95);
+        Check(busy == "" && Fire(none, ok, cpu: 0.95, ram: 0.95) == "CPU busy + Memory almost full",
+              "CPU re-arms after dropping; RAM fires after 2 minutes too");
+        cfg.AlertBusy = false;
+        Fire(none, ok);
+        for (int i = 0; i < Alerts.BusySeconds + 5; i++) busy += Fire(none, ok, cpu: 0.95, ram: 0.95);
+        Check(busy == "", "Busy alert off: silent");
+    }
 
     static void ClickThrough(PanelWindow panel, KeepAwake awake, string dir)
     {
