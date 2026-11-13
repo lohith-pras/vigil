@@ -137,6 +137,8 @@ sealed class Settings
     public bool KeepAwakeOnStartup { get; set; }
     public List<string> WatchApps { get; set; } = new();
     public bool ShowCpuInTray { get; set; } // false = app icon (default since 0.2)
+    public bool AutoUpdateCheck { get; set; } = true; // background check + notification (since 0.3)
+    public string? AnnouncedVersion { get; set; }     // newest release already announced, so it pops up once
 
     // Alerts (v0.3): all on except "battery charged".
     public bool AlertBatteryLow { get; set; } = true;

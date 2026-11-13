@@ -53,6 +53,7 @@ static class SelfTest
                   && BatteryHealth.FromInfo(0, 50_000, 0xFFFFFFFF, 5) is null, "Battery health: values, relative/unknown hidden");
 
             AlertChecks();
+            Check(System.Text.Json.JsonSerializer.Deserialize<Settings>("{}")!.AutoUpdateCheck, "Automatic update check is on by default (old settings.json too)");
 
             // --- processes ---
             var sampler = new ProcessSampler();
@@ -161,6 +162,13 @@ static class SelfTest
                 panel.ShowAt(new System.Drawing.Point(600, 500));
                 DoEvents();
                 Check(panel.IsLoaded, $"Panel opens ({theme})");
+                foreach (var (key, weight) in new[] { ("Sans", FontWeights.Normal), ("SansMedium", FontWeights.Medium), ("SansSemi", FontWeights.SemiBold), ("Mono", FontWeights.Normal), ("MonoMedium", FontWeights.Medium) })
+                {
+                    var family = (FontFamily)panel.Resources[key];
+                    bool ok = new Typeface(family, FontStyles.Normal, weight, FontStretches.Normal).TryGetGlyphTypeface(out var glyphs);
+                    string got = ok ? string.Join("/", glyphs.FamilyNames.Values) + " " + glyphs.Weight : "none";
+                    Check(ok && got.StartsWith("Geist"), $"Embedded font {key} resolves: {got}");
+                }
 
                 foreach (var (tab, name) in new[]
                          {
@@ -469,7 +477,8 @@ static class SelfTest
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            dc.DrawRectangle(panel.Background, null, new Rect(0, 0, w, h));
+            // The panel is transparent (acrylic shows through on Windows 11): paint a dark desktop behind it.
+            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x1E)), null, new Rect(0, 0, w, h));
             dc.DrawRectangle(new VisualBrush(root)
             {
                 ViewboxUnits = BrushMappingMode.Absolute,

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows.Automation;
 using System.Windows.Controls.Primitives;
+using System.Linq;
+using System.Windows.Media.Animation;
+using System.Windows.Documents;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -38,10 +41,10 @@ public partial class PanelWindow : Window
         // ("Set property ResourceDictionary.DeferrableContent") if the dictionary already has entries.
         ApplyTheme();
 
-        NetGraph.Label = max => Fmt.Rate(max);
         if (tray is not null) AlertsBlock.Bind(tray.Settings, tray.Settings.Save);
         SystemTab.IsChecked = true; // after InitializeComponent: Tab_Checked needs the pages to exist
 
+        TabGrid.SizeChanged += (_, _) => MoveTabDot(animate: false);
         SourceInitialized += (_, _) => SetupWindow();
         Closing += (_, _) => _closing = true;
         // Click anywhere outside closes the panel. Not while closing: Hide() on a closing window throws.
@@ -58,7 +61,19 @@ public partial class PanelWindow : Window
         // Windows 11 rounded corners (ignored on Windows 10).
         int round = Native.DWMWCP_ROUND;
         Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
-        ApplyDwmTheme();
+        int dark = 1;
+        Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+
+        // Windows 11 22H2+: real acrylic behind the panel. The window paints transparent and DWM fills it
+        // with blurred desktop; the panel's 80 % zinc layer sits on top. On Windows 10 (or if this fails)
+        // the transparent areas render black, which under the same layer is simply a solid near-black.
+        int acrylic = Native.DWMSBT_TRANSIENTWINDOW;
+        if (Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_SYSTEMBACKDROP_TYPE, ref acrylic, sizeof(int)) == 0)
+        {
+            var margins = new Native.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            Native.DwmExtendFrameIntoClientArea(_hwnd, ref margins);
+            if (HwndSource.FromHwnd(_hwnd)?.CompositionTarget is { } target) target.BackgroundColor = Colors.Transparent;
+        }
     }
 
     /// <summary>Show next to the tray icon. cursor = click position in physical pixels.</summary>
@@ -69,6 +84,48 @@ public partial class PanelWindow : Window
         Show();
         Activate();
         Position(cursor);
+        PlayOpen();
+    }
+
+    // ---------- motion ----------
+
+    static readonly KeySpline EaseOut = new(0.23, 1, 0.32, 1);   // entering
+    static readonly KeySpline EaseInOut = new(0.77, 0, 0.175, 1); // moving on screen
+
+    // "Show animations in Windows" off = reduced motion: fades only, nothing slides.
+    static bool Motion => SystemParameters.ClientAreaAnimation;
+
+    static DoubleAnimationUsingKeyFrames Spline(double to, double ms, KeySpline curve)
+    {
+        var a = new DoubleAnimationUsingKeyFrames();
+        a.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms)), curve));
+        return a;
+    }
+
+    /// <summary>Open: 6 px rise + fade, 150 ms. Close stays instant (Hide).</summary>
+    void PlayOpen()
+    {
+        var shift = (TranslateTransform)Shell.RenderTransform;
+        Shell.Opacity = 0;
+        Shell.BeginAnimation(OpacityProperty, Spline(1, 150, EaseOut));
+        if (Motion)
+        {
+            shift.Y = 6;
+            shift.BeginAnimation(TranslateTransform.YProperty, Spline(0, 150, EaseOut));
+        }
+    }
+
+    int _tabIndex = 2;
+
+    /// <summary>The cobalt dot under the active tab; slides 180 ms between tabs.</summary>
+    void MoveTabDot(bool animate)
+    {
+        double w = TabGrid.ActualWidth;
+        if (w <= 0) return;
+        double x = w / 6 * _tabIndex + w / 12 - TabDot.Width / 2;
+        var t = (TranslateTransform)TabDot.RenderTransform;
+        if (animate && Motion && IsVisible) t.BeginAnimation(TranslateTransform.XProperty, Spline(x, 180, EaseInOut));
+        else { t.BeginAnimation(TranslateTransform.XProperty, null); t.X = x; }
     }
 
     void Position(System.Drawing.Point cursor)
@@ -108,17 +165,29 @@ public partial class PanelWindow : Window
     {
         var s = _stats;
 
-        CpuBar.Value = s.Cpu * 100;
         CpuText.Text = $"{s.Cpu * 100:0}%";
         CpuGraph.Update(s.CpuHistory);
+        CpuPeak.Text = s.CpuHistory.Count > 0 ? $"peak {s.CpuHistory.Max() * 100:0}%" : "";
 
+        bool high = s.RamFraction >= 0.8;
+        RamText.Text = $"{s.RamFraction * 100:0}%";
+        RamText.Foreground = (Brush)Resources[high ? "Warn" : "Text"];
         RamBar.Value = s.RamFraction * 100;
-        RamText.Text = $"{Fmt.Gb(s.RamUsed)} / {Fmt.Gb(s.RamTotal)} GB · {s.RamFraction * 100:0}%";
-        RamGraph.Update(s.RamHistory);
+        RamBar.Foreground = (Brush)Resources[high ? "Warn" : "Text"];
+        RamDetail.Text = $"{Fmt.Gb(s.RamUsed)} / {Fmt.Gb(s.RamTotal)} GB";
+        RamLevel.Text = s.RamFraction >= 0.9 ? "very high" : high ? "high" : "";
+        RamLevel.Foreground = (Brush)Resources["Warn"];
 
         DownText.Text = Fmt.Rate(s.Down);
         UpText.Text = Fmt.Rate(s.Up);
-        NetGraph.Update(s.DownHistory);
+        SysDown.Text = Fmt.Rate(s.Down);
+        SysBat.Text = s.Battery.Present ? $"{s.Battery.Percent * 100:0}%" : "—";
+
+        // Header: what's holding the PC awake, else the two numbers people glance for.
+        HeaderDot.Visibility = _awake.Holding ? Visibility.Visible : Visibility.Collapsed;
+        HeaderStatus.Text = _awake.Holding
+            ? "awake" + (_awake.Remaining is { } left ? $" · {Short(left)}" : "")
+            : $"cpu {s.Cpu * 100:0}% · ram {s.RamFraction * 100:0}%";
 
         RefreshBattery(s.Battery);
         if (!ReferenceEquals(_shownDisks, s.Disks)) RebuildDisks(s.Disks);
@@ -149,36 +218,39 @@ public partial class PanelWindow : Window
         // Rebuild rows only when something changed, so a click never lands on a button that was just replaced.
         if (!changed) return;
 
-        SortCpu.Style = (Style)FindResource(_byRam ? "Chip" : "ChipOn");
-        SortRam.Style = (Style)FindResource(_byRam ? "ChipOn" : "Chip");
+        SortCpu.Style = (Style)FindResource(_byRam ? "Seg" : "SegOn");
+        SortRam.Style = (Style)FindResource(_byRam ? "SegOn" : "Seg");
 
         ProcList.Children.Clear();
         foreach (var app in _procs.Top(_byRam, 8))
         {
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            var row = new Grid { Height = 40 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
 
             var name = new TextBlock
             {
-                Text = app.Count > 1 ? $"{app.Name} ({app.Count})" : app.Name,
+                FontSize = 14,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = app.Name,
             };
+            name.Inlines.Add(new Run(app.Name));
+            if (app.Count > 1)
+                name.Inlines.Add(new Run($" ×{app.Count}") { FontFamily = (FontFamily)Resources["Mono"], FontSize = 11, Foreground = (Brush)Resources["Faint"] });
             var cpu = new TextBlock
             {
                 Text = _procs.Measured ? $"{app.Cpu * 100:0.0}%" : "…",
                 Style = (Style)FindResource("Value"),
-                FontWeight = _byRam ? FontWeights.Normal : FontWeights.SemiBold,
+                Foreground = (Brush)Resources[_byRam ? "SubText" : "Text"],
             };
             var ram = new TextBlock
             {
                 Text = app.Ram >= 1L << 30 ? $"{app.Ram / (double)(1L << 30):0.0} GB" : $"{app.Ram >> 20} MB",
                 Style = (Style)FindResource("Value"),
-                FontWeight = _byRam ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = (Brush)Resources[_byRam ? "Text" : "SubText"],
             };
             Grid.SetColumn(cpu, 1);
             Grid.SetColumn(ram, 2);
@@ -191,20 +263,19 @@ public partial class PanelWindow : Window
                 bool armed = _armed == app.Name;
                 var end = new Button
                 {
-                    Style = (Style)FindResource(armed ? "ChipOn" : "Chip"),
+                    Style = (Style)FindResource(armed ? "MiniDanger" : "Mini"),
                     Content = armed ? "End?" : "End",
-                    MinWidth = 48,
-                    Margin = new Thickness(8, 0, 0, 0),
+                    HorizontalAlignment = HorizontalAlignment.Right,
                     Tag = app.Name,
                     ToolTip = armed ? $"Click again to end {app.Name}" : $"End {app.Name}",
                 };
-                if (armed) end.Background = (Brush)Resources["Danger"];
                 AutomationProperties.SetName(end, $"End {app.Name}");
                 end.Click += EndTask_Click;
                 Grid.SetColumn(end, 3);
                 row.Children.Add(end);
             }
-            ProcList.Children.Add(row);
+            // Hairline above every row.
+            ProcList.Children.Add(new Border { BorderBrush = (Brush)Resources["CardBorder"], BorderThickness = new Thickness(0, 1, 0, 0), Child = row });
         }
     }
 
@@ -238,7 +309,7 @@ public partial class PanelWindow : Window
         BatBar.Value = b.Present ? b.Percent * 100 : 0;
         BatPct.Text = b.Present ? $"{b.Percent * 100:0}%" : "—";
 
-        (string text, string color) = !b.Present ? ("No battery", "SubText")
+        (string text, string color) = !b.Present ? ("No battery", "Faint")
             : b.Charging ? ("Charging", "Good")
             : b.PluggedIn ? ("Plugged in", "Good")
             : b.Percent < 0.2 ? ("On battery", "Danger")
@@ -246,7 +317,8 @@ public partial class PanelWindow : Window
         BatState.Text = text;
         var brush = (SolidColorBrush)Resources[color];
         BatDot.Fill = brush;
-        BatPill.Background = new SolidColorBrush(Color.FromArgb(0x33, brush.Color.R, brush.Color.G, brush.Color.B));
+        BatPill.Background = new SolidColorBrush(Color.FromArgb(0x24, brush.Color.R, brush.Color.G, brush.Color.B));
+        BatState.Foreground = brush;
 
         BatTime.Text = b.Present && !b.PluggedIn && b.SecondsLeft > 0
             ? $"{Fmt.Duration(TimeSpan.FromSeconds(b.SecondsLeft))} left"
@@ -266,11 +338,11 @@ public partial class PanelWindow : Window
             var danger = (Brush)Resources["Danger"];
 
             var header = new Grid();
-            header.Children.Add(new TextBlock
-            {
-                Text = string.IsNullOrWhiteSpace(d.Label) ? d.Name : $"{d.Name}  {d.Label}",
-                FontWeight = FontWeights.SemiBold,
-            });
+            var title = new TextBlock { FontSize = 15, FontFamily = (FontFamily)Resources["SansMedium"], FontWeight = FontWeights.Medium };
+            title.Inlines.Add(new Run(d.Name));
+            if (!string.IsNullOrWhiteSpace(d.Label))
+                title.Inlines.Add(new Run("  " + d.Label) { FontFamily = (FontFamily)Resources["Sans"], FontWeight = FontWeights.Normal, Foreground = (Brush)Resources["SubText"] });
+            header.Children.Add(title);
             header.Children.Add(new TextBlock
             {
                 Text = $"{d.UsedFraction * 100:0}% used",
@@ -278,16 +350,16 @@ public partial class PanelWindow : Window
                 Foreground = full ? danger : (Brush)Resources["Text"],
             });
 
-            var bar = new ProgressBar { Style = (Style)FindResource("Bar"), Value = d.UsedFraction * 100, Margin = new Thickness(0, 6, 0, 4) };
+            var bar = new ProgressBar { Style = (Style)FindResource("Bar"), Value = d.UsedFraction * 100, Margin = new Thickness(0, 10, 0, 8) };
             if (full) bar.Foreground = danger;
 
             var detail = new TextBlock
             {
                 Text = $"{Fmt.Size(d.Free)} free of {Fmt.Size(d.Total)}",
-                Style = (Style)FindResource("Muted"),
+                Style = (Style)FindResource("Axis"),
             };
 
-            var block = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            var block = new StackPanel { Margin = new Thickness(0, 0, 0, 20) };
             block.Children.Add(header);
             block.Children.Add(bar);
             block.Children.Add(detail);
@@ -305,15 +377,16 @@ public partial class PanelWindow : Window
         DeviceList.Children.Clear();
         foreach (var d in devices)
         {
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            var name = new TextBlock { Text = d.Name, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, ToolTip = d.Name };
-            var bar = new ProgressBar { Style = (Style)FindResource("Bar"), Value = d.Percent };
-            if (d.Percent <= 20) bar.Foreground = (Brush)Resources["Danger"];
-            var pct = new TextBlock { Text = $"{d.Percent}%", Style = (Style)FindResource("Value"), MinWidth = 36 };
+            var name = new TextBlock { Text = d.Name, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, ToolTip = d.Name };
+            var bar = new ProgressBar { Style = (Style)FindResource("Bar"), Value = d.Percent, Height = 4, Margin = new Thickness(10, 0, 10, 0) };
+            bool low = d.Percent <= 20;
+            if (low) bar.Foreground = (Brush)Resources["Danger"];
+            var pct = new TextBlock { Text = $"{d.Percent}%", Style = (Style)FindResource("Value"), MinWidth = 40, Foreground = (Brush)Resources[low ? "Danger" : "Text"] };
             Grid.SetColumn(bar, 1);
             Grid.SetColumn(pct, 2);
             row.Children.Add(name);
@@ -338,13 +411,28 @@ public partial class PanelWindow : Window
         LockedSwitch.IsChecked = a.PauseWhenLocked;
         StartupSwitch.IsChecked = a.OnAtStartup;
 
+        // Big reading: the countdown when timed, otherwise the state in one word.
+        AwakeBig.Text =
+            a.PausedReason is not null ? "Paused"
+            : !a.Wanted ? "Off"
+            : a.Remaining is { } left ? Clock(left)
+            : "On";
+        AwakeBig.Foreground = (Brush)Resources[a.Holding ? "Text" : "SubText"];
         AwakeStatus.Text =
-            a.PausedReason is { } why ? $"Keep awake paused: {why}"
+            a.PausedReason is { } why ? why
             : !a.Wanted ? "PC follows its normal power settings"
-            : !a.Active ? $"Keeping PC awake while {a.RunningApp} is open"
-            : a.UntilTime is { } t ? $"Keeping PC awake until {t:HH:mm} · {Fmt.Duration(a.Remaining ?? TimeSpan.Zero)} left"
-            : a.Remaining is { } r ? $"Keeping PC awake · {Fmt.Duration(r)} left"
-            : "Keeping PC awake until you turn it off";
+            : !a.Active ? $"while {a.RunningApp} is open"
+            : a.UntilTime is { } t ? $"left · until {t:HH:mm}"
+            : a.Remaining is not null ? "left"
+            : "until you turn it off";
+
+        // Remaining time as a cobalt bar over hatch; only for timed sessions.
+        if (a.Active && a.Remaining is { } rem && a.Duration is { } total && total > TimeSpan.Zero)
+        {
+            AwakeBar.Visibility = Visibility.Visible;
+            AwakeBar.Value = Math.Clamp(rem / total * 100, 0, 100);
+        }
+        else AwakeBar.Visibility = Visibility.Collapsed;
 
         foreach (Button chip in Chips.Children)
         {
@@ -417,9 +505,10 @@ public partial class PanelWindow : Window
 
     void Tab_Checked(object sender, RoutedEventArgs e)
     {
-        if (SectionTitle is null) return; // fires during InitializeComponent
+        if (DiskPage is null) return; // fires during InitializeComponent, before the pages exist
         var tab = (RadioButton)sender;
-        SectionTitle.Text = ((string)tab.Tag).ToUpperInvariant();
+        _tabIndex = int.Parse((string)tab.Tag);
+        MoveTabDot(animate: true);
         AwakePage.Visibility = tab == AwakeTab ? Visibility.Visible : Visibility.Collapsed;
         DisplaysPage.Visibility = tab == DisplaysTab ? Visibility.Visible : Visibility.Collapsed;
         SystemPage.Visibility = tab == SystemTab ? Visibility.Visible : Visibility.Collapsed;
@@ -509,6 +598,9 @@ public partial class PanelWindow : Window
             var update = new MenuItem { Header = "Check for updates…" };
             update.Click += (_, _) => tray.CheckForUpdates();
             menu.Items.Add(update);
+            var auto = new MenuItem { Header = "Check for updates automatically", IsCheckable = true, IsChecked = tray.AutoUpdateCheck };
+            auto.Click += (_, _) => tray.ToggleAutoUpdate();
+            menu.Items.Add(auto);
             menu.Items.Add(new Separator());
             menu.Items.Add(new MenuItem { Header = $"Vigil {Updater.Current}", IsEnabled = false });
         }
@@ -519,44 +611,39 @@ public partial class PanelWindow : Window
 
     // ---------- theme ----------
 
-    bool _light;
+    // ponytail: one dark palette (the design is dark-native); ForceLight is kept so old callers compile.
+    static readonly Dictionary<string, string> Palette = new()
+    {
+        ["Bg"] = "#CC09090B",         // panel: zinc-950 at 80 % over acrylic
+        ["Card"] = "#08FFFFFF",       // faint wells (speed test box)
+        ["CardBorder"] = "#12FFFFFF", // hairlines
+        ["Text"] = "#FAFAFA",
+        ["SubText"] = "#A1A1AA",
+        ["Faint"] = "#8B8B94",        // labels, help, axis
+        ["Accent"] = "#4C7DFF",       // now / here / on, nothing else
+        ["Track"] = "#1FFFFFFF",
+        ["Hover"] = "#0AFFFFFF",
+        ["TabSel"] = "#00000000",
+        ["ChipBg"] = "#00000000",
+        ["Teal"] = "#2DD4BF",
+        ["Good"] = "#3DD68C",
+        ["Warn"] = "#F5B54A",
+        ["Danger"] = "#F2555A",
+    };
 
     void ApplyTheme()
     {
-        _light = ForceLight ?? Theme.AppsLight;
-        var palette = _light
-            ? new Dictionary<string, string>
-            {
-                ["Bg"] = "#F3F3F3", ["Card"] = "#FFFFFF", ["CardBorder"] = "#E3E3E3", ["Text"] = "#1B1B1B",
-                ["SubText"] = "#6E6E6E", ["Track"] = "#E3E3E3", ["Hover"] = "#ECECEC", ["TabSel"] = "#DCE8FD",
-                ["ChipBg"] = "#EDEDED",
-            }
-            : new Dictionary<string, string>
-            {
-                ["Bg"] = "#1E1E1E", ["Card"] = "#2A2A2A", ["CardBorder"] = "#3A3A3A", ["Text"] = "#F2F2F2",
-                ["SubText"] = "#9B9B9B", ["Track"] = "#3D3D3D", ["Hover"] = "#343434", ["TabSel"] = "#24385A",
-                ["ChipBg"] = "#383838",
-            };
-        palette["Accent"] = "#3B82F6";
-        palette["Teal"] = "#2DD4BF";
-        palette["Good"] = "#22C55E";
-        palette["Warn"] = "#EAB308";
-        palette["Danger"] = "#EF4444";
-
-        foreach (var (key, hex) in palette)
+        if (Resources.Contains("Bg")) return; // static palette: set once
+        foreach (var (key, hex) in Palette)
         {
             var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             brush.Freeze();
             Resources[key] = brush;
         }
-        _shownDisks = null; // rebuild rows with the new colours
-        _shownDevices = null;
-        if (_hwnd != IntPtr.Zero) ApplyDwmTheme();
     }
 
-    void ApplyDwmTheme()
-    {
-        int dark = _light ? 0 : 1;
-        Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
-    }
+    static string Clock(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes:00}:{t.Seconds:00}";
+
+    static string Short(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:00}m" : $"{Math.Max(1, (int)Math.Ceiling(t.TotalMinutes))}m";
 }

@@ -83,12 +83,15 @@ sealed class Tray : IDisposable
         _menu.Items.Add(awakeItem);
         _menu.Items.Add(cpuItem);
         _menu.Items.Add(updateItem);
+        var autoItem = new Forms.ToolStripMenuItem("Check for updates automatically", null, (_, _) => ToggleAutoUpdate());
+        _menu.Items.Add(autoItem);
         _menu.Items.Add(new Forms.ToolStripSeparator());
         _menu.Items.Add("Quit", null, (_, _) => _quit());
         _menu.Opening += (_, _) =>
         {
             startItem.Checked = Startup.Enabled;
             cpuItem.Checked = _settings.ShowCpuInTray;
+            autoItem.Checked = _settings.AutoUpdateCheck;
             awakeItem.Checked = _awake.Active;
         };
 
@@ -111,6 +114,47 @@ sealed class Tray : IDisposable
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => OnTick();
         _timer.Start();
+
+        // Background update check: 2 min after start, then every 6 h, only while the option is on.
+        _icon.BalloonTipClicked += (_, _) => { if (_balloonIsUpdate) CheckForUpdates(); };
+        _icon.BalloonTipClosed += (_, _) => _balloonIsUpdate = false;
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(6);
+            await BackgroundUpdateCheck();
+        };
+        _updateTimer.Start();
+    }
+
+    readonly DispatcherTimer _updateTimer;
+    bool _balloonIsUpdate;
+
+    /// <summary>Quiet check: a notification only when a newer release exists and hasn't been announced yet.</summary>
+    async System.Threading.Tasks.Task BackgroundUpdateCheck()
+    {
+        if (!_settings.AutoUpdateCheck || _updating) return;
+        try
+        {
+            var release = await Updater.CheckAsync();
+            if (release is null || release.Version <= Updater.Current) return;
+            string v = release.Version.ToString();
+            if (_settings.AnnouncedVersion == v) return;
+            _settings.AnnouncedVersion = v;
+            _settings.Save();
+            _balloonIsUpdate = true;
+            _icon.ShowBalloonTip(15_000, $"Vigil {v} is available",
+                $"You have {Updater.Current}. Click to update; Vigil restarts by itself.", Forms.ToolTipIcon.Info);
+        }
+        catch (Exception) { } // offline or rate-limited: try again next round, never bother the user
+    }
+
+    public bool AutoUpdateCheck => _settings.AutoUpdateCheck;
+
+    public void ToggleAutoUpdate()
+    {
+        _settings.AutoUpdateCheck = !_settings.AutoUpdateCheck;
+        _settings.Save();
     }
 
     void OnTick()
@@ -119,7 +163,10 @@ sealed class Tray : IDisposable
         // ponytail: battery state from the 1 s sample; app list re-checked every 5 s.
         _awake.Tick(pluggedIn: _stats.Battery.PluggedIn || !_stats.Battery.Present, checkApps: _tick % 5 == 0);
         foreach (var (title, text) in _alerts.Check(_stats.Battery, _stats.Disks, _stats.Cpu, _stats.RamFraction))
+        {
+            _balloonIsUpdate = false; // clicking an alert must not start an update
             _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.Warning); // Windows 10/11 shows it as a toast
+        }
         if (_tick++ % 2 == 0)
         {
             RenderIcon();
@@ -324,6 +371,7 @@ sealed class Tray : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _updateTimer.Stop();
         SystemEvents.SessionSwitch -= OnSessionSwitch; // static event: unsubscribe or it leaks
         // Back to normal power rules. Direct call, not _awake.Stop(): that would fire Changed and
         // could save a "stopped" state over the user's options during shutdown.

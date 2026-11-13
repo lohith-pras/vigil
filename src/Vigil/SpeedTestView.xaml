@@ -2,7 +2,7 @@
 <UserControl x:Class="Vigil.SpeedTestView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Margin="0,10,0,0">
+    <StackPanel>
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -15,16 +15,16 @@
         </Grid>
         <UniformGrid x:Name="Results" Columns="3" Margin="0,10,0,0" Visibility="Collapsed">
             <StackPanel>
-                <TextBlock x:Name="DownValue" FontSize="16" FontWeight="SemiBold" Text="—" />
-                <TextBlock Style="{DynamicResource Muted}" Text="↓ Mbps" />
+                <TextBlock x:Name="DownValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <TextBlock Style="{DynamicResource Axis}" Text="↓ Mbps" />
             </StackPanel>
             <StackPanel>
-                <TextBlock x:Name="UpValue" FontSize="16" FontWeight="SemiBold" Text="—" />
-                <TextBlock Style="{DynamicResource Muted}" Text="↑ Mbps" />
+                <TextBlock x:Name="UpValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <TextBlock Style="{DynamicResource Axis}" Text="↑ Mbps" />
             </StackPanel>
             <StackPanel>
-                <TextBlock x:Name="PingValue" FontSize="16" FontWeight="SemiBold" Text="—" />
-                <TextBlock Style="{DynamicResource Muted}" Text="Ping ms" />
+                <TextBlock x:Name="PingValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <TextBlock Style="{DynamicResource Axis}" Text="ping ms" />
             </StackPanel>
         </UniformGrid>
     </StackPanel>
