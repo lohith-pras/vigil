@@ -150,7 +150,7 @@ Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Networ
 - **End task**: two-step (click → "End?" for 3 s → click again). Ends every process of that name. Shows an error if Windows refuses (e.g. elevated or system processes).
 - Sampled every 2 s **only while this tab is open** (keeps background CPU under 1 %).
 
-### 4. Displays (`feature/displays`) — postponed
+### 4. Displays — moved to v0.3 (see below)
 
 - **Displays** tab, one card per screen:
   - Built-in screen: brightness slider (WMI `WmiMonitorBrightness`; needs the `System.Management` package).
@@ -159,11 +159,43 @@ Panel grows to 6 tabs: **Keep awake · Displays · System · Processes · Networ
 - Below the cards: display mode **Extend · Duplicate · Laptop only · External only** (`SetDisplayConfig`, same as Win+P), and **Turn screens off** (until mouse/keyboard).
 - Not doing: input switching (can blank the screen), dimming below minimum, night light, resolution changes.
 
-### Not in v0.2
-
-GPU usage, alerts, per-core CPU grid, disk activity, battery health, memory-pressure pill, uptime (all discussed; kept for later).
 
 ### Added during v0.2 (from 0.1.3 feedback)
 
 - **Tray shows the app icon** instead of the CPU number (the number wasn't understood). Keep-awake adds a green dot. "Show CPU % in tray icon" (Settings / right-click menu) brings the number back.
 - **Check for updates** (Settings / right-click menu): only network call, only on click. Downloads the same flavour that's running, verifies size + SHA-256 from the release, swaps the exe, restarts.
+
+## v0.3 (agreed 2026-11-13)
+
+Built in parallel: each feature on its own `feature/…` branch, CI self-test green, merged into `main` by the coordinating session. No tag / release until asked. A **design pass** (darker black, acrylic glass, smoother) runs at the same time on `feature/design`.
+
+To keep merges small while the design pass rewrites `PanelWindow.xaml`: each new tab/section lives in **its own UserControl file** (e.g. `DisplaysPage.xaml`), uses the existing `DynamicResource` brush keys and named styles, and touches `PanelWindow` only to add a tab + host it.
+
+### 1. Displays (`feature/displays`)
+
+As specified in v0.2 §4 above: per-screen cards (built-in brightness via WMI; external brightness / contrast / volume via DDC/CI), refresh-rate buttons, display mode (Extend · Duplicate · PC screen only · Second screen only via `SetDisplayConfig`), Turn screens off.
+
+### 2. Battery health (`feature/battery-alerts-speedtest`)
+
+- In the battery section: **health %** = full-charge capacity ÷ design capacity, both in mWh, plus **charge cycles** if the battery reports them.
+- Source: battery driver queries (`IOCTL_BATTERY_QUERY_INFORMATION` on the battery device, no admin) or WMI `root\WMI` battery classes. Read on panel open, not every second.
+- Hidden on PCs without a battery.
+
+### 3. Alerts (`feature/battery-alerts-speedtest`)
+
+Windows notifications from the tray icon, each with an on/off switch in Settings:
+- Battery low (≤ 20 %, again at ≤ 10 %) while on battery.
+- Battery charged (100 %, or a chosen limit like 80 %) while plugged in.
+- Drive almost full (> 90 % used).
+- CPU or RAM above 90 % for 2 minutes.
+
+Each alert fires once, then only again after the condition has cleared. No network.
+
+### 4. Network speed test (`feature/battery-alerts-speedtest`)
+
+- **Run speed test** button in Network & battery: download speed, upload speed, latency (ping).
+- Uses Cloudflare's public speed-test endpoints (`speed.cloudflare.com`), no account or key. **Second network exception** (after updates): only runs when clicked, shows how much data it will use (~30–100 MB) and can be cancelled.
+
+### Dropped
+
+GPU usage, per-core CPU grid, disk activity, memory-pressure pill, uptime: removed from the plan.
