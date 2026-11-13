@@ -417,6 +417,7 @@ public partial class PanelWindow : Window
         var tab = (RadioButton)sender;
         SectionTitle.Text = ((string)tab.Tag).ToUpperInvariant();
         AwakePage.Visibility = tab == AwakeTab ? Visibility.Visible : Visibility.Collapsed;
+        DisplaysPage.Visibility = tab == DisplaysTab ? Visibility.Visible : Visibility.Collapsed;
         SystemPage.Visibility = tab == SystemTab ? Visibility.Visible : Visibility.Collapsed;
         NetPage.Visibility = tab == NetTab ? Visibility.Visible : Visibility.Collapsed;
         ProcPage.Visibility = tab == ProcTab ? Visibility.Visible : Visibility.Collapsed;
