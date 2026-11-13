@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
@@ -140,10 +141,12 @@ static class SelfTest
                     panel.Refresh();
                     Save(panel, Path.Combine(dir, $"panel-{theme}-{name}.png"));
                 }
-                Check(true, $"All 4 tabs rendered ({theme})");
+                Check(true, $"All tabs rendered ({theme})");
 
                 if (!light)
                 {
+                    TestDisplays(panel, dir);
+
                     // No Bluetooth on the CI machine: render fake rows once to check the layout.
                     var real = stats.Devices;
                     stats.Devices = new[] { new DeviceBattery("WH-1000XM4", 76), new DeviceBattery("MX Master 3S", 15) };
@@ -187,6 +190,67 @@ static class SelfTest
             File.WriteAllText(Path.Combine(dir, "report.txt"), Log.ToString());
         }
     }
+
+    /// <summary>Read-only: never changes mode, refresh rate, brightness or screen power on the CI machine.</summary>
+    static void TestDisplays(PanelWindow panel, string dir)
+    {
+        var page = panel.DisplaysPage;
+        if (!panel.IsVisible) panel.ShowAt(new System.Drawing.Point(600, 500)); // the page only loads while shown
+        panel.DisplaysTab.IsChecked = true;
+        WaitFor(() => page.IsVisible, 5);
+        WaitFor(() => !page.Loading, 20);
+        var screens = page.Screens;
+        Check(!page.Loading && screens is not null, $"Displays tab loads off the UI thread: {screens?.Count} screen(s), mode {Displays.CurrentMode()}");
+        foreach (var s in screens!) Note($"      {s}");
+        Check(screens.Count > 0, "At least one display found");
+        Save(panel, Path.Combine(dir, "panel-dark-2-displays.png"));
+        if (screens.Any(s => s.Controls.Count == 0))
+            Check(Texts(page).Contains("This monitor doesn't support control"), "Unsupported monitor message renders");
+
+        panel.SystemTab.IsChecked = true;
+        WaitFor(() => screens.All(s => s.Closed), 5);
+        Check(screens.All(s => s.Closed), "Monitor handles released when the tab closes");
+
+        // Layout with made-up hardware: DDC monitor with all three sliders, a silent monitor, a separate laptop card.
+        panel.DisplaysTab.IsChecked = true;
+        WaitFor(() => page.IsVisible, 5);
+        WaitFor(() => !page.Loading, 20);
+        Displays.Release(page.Screens);
+        var ddc = new DisplayScreen { Title = "Display 1 · main", Device = "fake", Primary = true, Width = 2560, Height = 1440, Hz = 144, Rates = new[] { 60, 120, 144 } };
+        ddc.Controls.Add(new DisplayControl("Brightness", 70, 100, ddc, IntPtr.Zero, 0x10));
+        ddc.Controls.Add(new DisplayControl("Contrast", 50, 100, ddc, IntPtr.Zero, 0x12));
+        ddc.Controls.Add(new DisplayControl("Volume", 30, 100, ddc, IntPtr.Zero, 0x62));
+        var silent = new DisplayScreen { Title = "Display 2", Device = "fake", Width = 1920, Height = 1080, Hz = 60, Rates = new[] { 60 } };
+        var laptop = new DisplayScreen { Title = "Built-in display" };
+        laptop.Controls.Add(new DisplayControl("Brightness", 40, 100, laptop, IntPtr.Zero, 0));
+        foreach (var f in new[] { ddc, silent, laptop }) f.Closed = true; // fake: any stray Set() is a no-op
+        page.Show(new List<DisplayScreen> { ddc, silent, laptop }, Displays.ModeExtend);
+        panel.Refresh();
+        var texts = Texts(page).ToList();
+        Check(texts.Contains("This monitor doesn't support control") && texts.Contains("144 Hz") && texts.Contains("Volume")
+              && Descendants(page).OfType<Slider>().Count() == 4,
+              "Display blocks render sliders, refresh-rate chips and the unsupported state");
+        Save(panel, Path.Combine(dir, "panel-dark-2-displays-layout.png"));
+        panel.SystemTab.IsChecked = true;
+    }
+
+    static void WaitFor(Func<bool> done, int seconds)
+    {
+        var until = DateTime.UtcNow.AddSeconds(seconds);
+        while (!done() && DateTime.UtcNow < until) { Thread.Sleep(50); DoEvents(); }
+    }
+
+    static IEnumerable<DependencyObject> Descendants(DependencyObject o)
+    {
+        foreach (var c in LogicalTreeHelper.GetChildren(o).OfType<DependencyObject>())
+        {
+            yield return c;
+            foreach (var d in Descendants(c)) yield return d;
+        }
+    }
+
+    static IEnumerable<string> Texts(DependencyObject o) =>
+        Descendants(o).OfType<TextBlock>().Select(t => t.Text).Concat(Descendants(o).OfType<ContentControl>().Select(c => c.Content as string ?? ""));
 
     static void ClickThrough(PanelWindow panel, KeepAwake awake, string dir)
     {
