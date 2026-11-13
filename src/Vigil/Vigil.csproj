@@ -16,7 +16,7 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Product>Vigil</Product>
   </PropertyGroup>
 
