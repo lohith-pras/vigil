@@ -39,6 +39,7 @@ public partial class PanelWindow : Window
         ApplyTheme();
 
         NetGraph.Label = max => Fmt.Rate(max);
+        if (tray is not null) AlertsBlock.Bind(tray.Settings, tray.Settings.Save);
         SystemTab.IsChecked = true; // after InitializeComponent: Tab_Checked needs the pages to exist
 
         SourceInitialized += (_, _) => SetupWindow();
@@ -250,6 +251,9 @@ public partial class PanelWindow : Window
         BatTime.Text = b.Present && !b.PluggedIn && b.SecondsLeft > 0
             ? $"{Fmt.Duration(TimeSpan.FromSeconds(b.SecondsLeft))} left"
             : "";
+        var health = b.Present ? _stats.Health : null;
+        BatHealth.Text = health?.Text ?? "";
+        BatHealth.Visibility = health is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     void RebuildDisks(IReadOnlyList<DiskInfo> disks)

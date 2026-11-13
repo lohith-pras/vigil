@@ -180,6 +180,7 @@ As specified in v0.2 §4 above: per-screen cards (built-in brightness via WMI; e
 - In the battery section: **health %** = full-charge capacity ÷ design capacity, both in mWh, plus **charge cycles** if the battery reports them.
 - Source: battery driver queries (`IOCTL_BATTERY_QUERY_INFORMATION` on the battery device, no admin) or WMI `root\WMI` battery classes. Read on panel open, not every second.
 - Hidden on PCs without a battery.
+- Built: `IOCTL_BATTERY_QUERY_INFORMATION` via SetupAPI (no WMI, no new package), read each time the panel opens. Shown as "Health 86% · 312 cycles" under the battery state; cycles left out when the battery reports 0/unknown; hidden when capacities are unknown or relative (percent-only drivers).
 
 ### 3. Alerts (`feature/battery-alerts-speedtest`)
 
@@ -191,10 +192,13 @@ Windows notifications from the tray icon, each with an on/off switch in Settings
 
 Each alert fires once, then only again after the condition has cleared. No network.
 
+Built: `NotifyIcon.ShowBalloonTip` (shows as a toast on Windows 10/11), checked on the existing 1 s tick from data `Stats` already has. Switches live in a collapsible **Alerts** block at the bottom of the Network & battery tab (not the Settings menu). One switch covers both CPU and RAM. Charge limit chips: 80 / 90 / 100 %. Defaults: all on except "battery charged". Saved in `settings.json`.
+
 ### 4. Network speed test (`feature/battery-alerts-speedtest`)
 
 - **Run speed test** button in Network & battery: download speed, upload speed, latency (ping).
 - Uses Cloudflare's public speed-test endpoints (`speed.cloudflare.com`), no account or key. **Second network exception** (after updates): only runs when clicked, shows how much data it will use (~30–100 MB) and can be cancelled.
+- Built: ping = median of 8 empty requests (first dropped: DNS/TLS). Download 0.1 → 1 → 10 → 25 MB and upload 0.1 → 1 → 10 → 20 MB, smallest first; a phase stops when the next size wouldn't fit ~6 s at the speed seen so far, so the test takes ~10–15 s and a slow line uses only a few MB. Result is the best Mbps seen. Shows "Uses up to about 67 MB of data" before running; live values while running.
 
 ### Dropped
 

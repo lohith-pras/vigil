@@ -364,6 +364,7 @@
                     </Grid>
                     <local:Sparkline x:Name="NetGraph" Height="50" Margin="0,8,0,0" Max="0"
                                      Stroke="{DynamicResource Accent}" Guide="{DynamicResource SubText}" />
+                    <local:SpeedTestView x:Name="SpeedTestBlock" />
 
                     <Border Style="{StaticResource Divider}" />
 
@@ -387,11 +388,15 @@
                         </Border>
                         <TextBlock x:Name="BatTime" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
+                    <TextBlock x:Name="BatHealth" Style="{StaticResource Muted}" Margin="0,8,0,0" Visibility="Collapsed" />
 
                     <Border Style="{StaticResource Divider}" />
 
                     <TextBlock Style="{StaticResource Heading}" Text="Bluetooth devices" />
                     <StackPanel x:Name="DeviceList" />
+
+                    <Border Style="{StaticResource Divider}" />
+                    <local:AlertsView x:Name="AlertsBlock" />
                 </StackPanel>
 
                 <!-- Disks -->

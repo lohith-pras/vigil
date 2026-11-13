@@ -51,6 +51,7 @@ sealed class Tray : IDisposable
     readonly Stats _stats = new();
     readonly KeepAwake _awake = new();
     readonly Settings _settings = Settings.Load();
+    readonly Alerts _alerts;
     readonly Action _quit;
     readonly Dispatcher _ui = Dispatcher.CurrentDispatcher;
 
@@ -64,6 +65,7 @@ sealed class Tray : IDisposable
     public Tray(Action quit)
     {
         _quit = quit;
+        _alerts = new Alerts(_settings);
         _settings.LoadInto(_awake);
         if (_awake.OnAtStartup) _awake.Start(null);
         Startup.FixPath();
@@ -116,6 +118,8 @@ sealed class Tray : IDisposable
         _stats.Sample();
         // ponytail: battery state from the 1 s sample; app list re-checked every 5 s.
         _awake.Tick(pluggedIn: _stats.Battery.PluggedIn || !_stats.Battery.Present, checkApps: _tick % 5 == 0);
+        foreach (var (title, text) in _alerts.Check(_stats.Battery, _stats.Disks, _stats.Cpu, _stats.RamFraction))
+            _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.Warning); // Windows 10/11 shows it as a toast
         if (_tick++ % 2 == 0)
         {
             RenderIcon();
@@ -174,6 +178,7 @@ sealed class Tray : IDisposable
         }
         _stats.RefreshDisks();
         _stats.RefreshDevices();
+        _stats.RefreshHealth();
         _panel.ShowAt(Forms.Cursor.Position);
     }
 
@@ -206,6 +211,8 @@ sealed class Tray : IDisposable
     }
 
     public bool ShowCpuInTray => _settings.ShowCpuInTray;
+
+    internal Settings Settings => _settings;
 
     bool _updating;
 

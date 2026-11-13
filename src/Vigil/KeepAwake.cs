@@ -138,6 +138,13 @@ sealed class Settings
     public List<string> WatchApps { get; set; } = new();
     public bool ShowCpuInTray { get; set; } // false = app icon (default since 0.2)
 
+    // Alerts (v0.3): all on except "battery charged".
+    public bool AlertBatteryLow { get; set; } = true;
+    public bool AlertCharged { get; set; }
+    public int ChargeLimit { get; set; } = 100; // 80, 90 or 100
+    public bool AlertDiskFull { get; set; } = true;
+    public bool AlertBusy { get; set; } = true;   // CPU or RAM above 90 % for 2 min
+
     public void LoadInto(KeepAwake a)
     {
         a.DisplayOn = KeepDisplayOn;
