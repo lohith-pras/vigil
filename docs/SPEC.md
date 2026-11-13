@@ -215,3 +215,8 @@ Built: `NotifyIcon.ShowBalloonTip` (shows as a toast on Windows 10/11), checked 
 ### Dropped
 
 GPU usage, per-core CPU grid, disk activity, memory-pressure pill, uptime: removed from the plan.
+
+### Design pass + automatic update notifications (`feature/design`)
+
+- **New look**, recorded in [DESIGN.md](DESIGN.md): zinc-black acrylic double-bezel panel, Geist + Geist Mono embedded, lowercase `vigil` wordmark, sliding cobalt tab dot, CPU history as a dot field, hatch headroom in bars, pill chips. One dark palette (the light theme is dropped: the design is dark-native).
+- **Automatic update check** (user request, changes the network rule): when "Check for updates automatically" is on (default), Vigil checks GitHub Releases 2 minutes after starting and then every 6 hours. A newer release it hasn't announced yet shows a Windows notification; clicking it opens the usual update prompt. Failures are silent. Network calls are now: this check, the manual check, and the speed test on click.
