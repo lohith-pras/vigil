@@ -21,8 +21,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Displays tab: laptop panel brightness (WMI root\WMI). Loaded only when that tab opens. -->
+    <PackageReference Include="System.Management" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Also drawn as the tray icon. -->
     <EmbeddedResource Include="Vigil.ico" LogicalName="Vigil.ico" />
+    <!-- Geist + Geist Mono (SIL OFL, see Fonts/OFL.txt), used by the panel via pack://application:,,,/Fonts/ -->
+    <Resource Include="Fonts\*.ttf" />
   </ItemGroup>
 
 </Project>

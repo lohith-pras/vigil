@@ -2,48 +2,113 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Vigil"
-        Title="Vigil" Width="340" Height="540"
+        Title="Vigil" Width="348" Height="576"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
-        Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
-        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        Background="Transparent" Foreground="{DynamicResource Text}"
+        FontFamily="{DynamicResource Sans}" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <!--
+      Design (docs/DESIGN.md): zinc-black acrylic in a double bezel; Geist for words, Geist Mono for every
+      measurement; one cobalt dot marks "now" / "here" / "on"; hatch fills mark headroom; hairlines, no cards.
+      Motion: press scale .97 / 140 ms, tab dot 180 ms in-out, open 150 ms rise + fade, close instant.
+    -->
 
     <Window.Resources>
+        <!-- Fonts: static Geist files embedded from Fonts/. Each weight lists its legacy family name first and
+             the typographic family second, so it resolves however WPF groups the faces. -->
+        <FontFamily x:Key="Sans">pack://application:,,,/Fonts/#Geist</FontFamily>
+        <FontFamily x:Key="SansMedium">pack://application:,,,/Fonts/#Geist Medium, pack://application:,,,/Fonts/#Geist</FontFamily>
+        <FontFamily x:Key="SansSemi">pack://application:,,,/Fonts/#Geist SemiBold, pack://application:,,,/Fonts/#Geist</FontFamily>
+        <FontFamily x:Key="Mono">pack://application:,,,/Fonts/#Geist Mono</FontFamily>
+        <FontFamily x:Key="MonoMedium">pack://application:,,,/Fonts/#Geist Mono Medium, pack://application:,,,/Fonts/#Geist Mono</FontFamily>
         <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
+        <!-- Headroom texture: the unused part of every bar. -->
+        <DrawingBrush x:Key="Hatch" TileMode="Tile" Viewport="0,0,5,5" ViewportUnits="Absolute"
+                      Viewbox="0,0,5,5" ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing Geometry="M0,5 L5,0">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#24FFFFFF" Thickness="1" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <!-- Press feedback shared by every pressable template: scale .97, strong ease-out. -->
+        <Storyboard x:Key="PressIn">
+            <DoubleAnimation Storyboard.TargetName="root" Storyboard.TargetProperty="RenderTransform.ScaleX" To="0.97" Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction><ExponentialEase EasingMode="EaseOut" Exponent="5" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="root" Storyboard.TargetProperty="RenderTransform.ScaleY" To="0.97" Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction><ExponentialEase EasingMode="EaseOut" Exponent="5" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+        <Storyboard x:Key="PressOut">
+            <DoubleAnimation Storyboard.TargetName="root" Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction><ExponentialEase EasingMode="EaseOut" Exponent="5" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="root" Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.14">
+                <DoubleAnimation.EasingFunction><ExponentialEase EasingMode="EaseOut" Exponent="5" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
         <Style x:Key="Muted" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+            <Setter Property="Foreground" Value="{DynamicResource Faint}" />
             <Setter Property="FontSize" Value="12" />
         </Style>
 
         <Style x:Key="Heading" TargetType="TextBlock">
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="FontFamily" Value="{DynamicResource SansMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <Style x:Key="Title" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource SansMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
         </Style>
 
         <Style x:Key="Value" TargetType="TextBlock">
-            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="Reading" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource MonoMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="22" />
+        </Style>
+
+        <Style x:Key="Axis" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Faint}" />
         </Style>
 
         <Style x:Key="Divider" TargetType="Border">
             <Setter Property="Height" Value="1" />
             <Setter Property="Background" Value="{DynamicResource CardBorder}" />
-            <Setter Property="Margin" Value="0,12,0,12" />
+            <Setter Property="Margin" Value="0,20,0,20" />
         </Style>
 
         <Style x:Key="Bar" TargetType="ProgressBar">
             <Setter Property="Height" Value="6" />
             <Setter Property="Maximum" Value="100" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="10,0,12,0" />
-            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
                         <Grid>
-                            <Border x:Name="PART_Track" CornerRadius="3" Background="{DynamicResource Track}" />
+                            <Border CornerRadius="3" Background="{StaticResource Hatch}" BorderBrush="#12FFFFFF" BorderThickness="1" />
+                            <Border x:Name="PART_Track" />
                             <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
                                     Background="{TemplateBinding Foreground}" />
                         </Grid>
@@ -54,22 +119,33 @@
 
         <Style x:Key="Tab" TargetType="RadioButton">
             <Setter Property="GroupName" Value="Tabs" />
-            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+            <Setter Property="Foreground" Value="{DynamicResource Faint}" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="b" CornerRadius="8" Background="Transparent" Height="34" Margin="2">
+                        <Border x:Name="root" CornerRadius="10" Background="Transparent" Height="40" Margin="1,0"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextElement.FontFamily="{StaticResource Icons}" TextElement.FontSize="16" />
+                                              TextElement.FontFamily="{StaticResource Icons}" TextElement.FontSize="17" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Hover}" />
+                                <Setter TargetName="root" Property="Background" Value="#0AFFFFFF" />
+                                <Setter Property="Foreground" Value="#E4E4E7" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource TabSel}" />
-                                <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="root" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                                <Setter TargetName="root" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource PressIn}" /></Trigger.EnterActions>
+                                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource PressOut}" /></Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -80,16 +156,41 @@
         <Style x:Key="Switch" TargetType="CheckBox">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <Border x:Name="track" Width="40" Height="22" CornerRadius="11" Background="{DynamicResource Track}">
-                            <Ellipse x:Name="thumb" Width="16" Height="16" Margin="3" Fill="White" HorizontalAlignment="Left" />
+                        <Border x:Name="track" Width="38" Height="22" CornerRadius="11" BorderThickness="1" BorderBrush="Transparent">
+                            <Border.Background><SolidColorBrush Color="#1FFFFFFF" /></Border.Background>
+                            <Ellipse x:Name="knob" Width="16" Height="16" Margin="2,0,0,0" Fill="#FAFAFA" HorizontalAlignment="Left">
+                                <Ellipse.RenderTransform><TranslateTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="track" Property="Background" Value="{DynamicResource Accent}" />
-                                <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="knob" Storyboard.TargetProperty="RenderTransform.X">
+                                                <SplineDoubleKeyFrame KeyTime="0:0:0.2" Value="16" KeySpline="0.77,0 0.175,1" />
+                                            </DoubleAnimationUsingKeyFrames>
+                                            <ColorAnimation Storyboard.TargetName="track" Storyboard.TargetProperty="Background.Color" To="#4C7DFF" Duration="0:0:0.18" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="knob" Storyboard.TargetProperty="RenderTransform.X">
+                                                <SplineDoubleKeyFrame KeyTime="0:0:0.2" Value="0" KeySpline="0.77,0 0.175,1" />
+                                            </DoubleAnimationUsingKeyFrames>
+                                            <ColorAnimation Storyboard.TargetName="track" Storyboard.TargetProperty="Background.Color" To="#1FFFFFFF" Duration="0:0:0.18" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="track" Property="BorderBrush" Value="#80FFFFFF" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -97,21 +198,43 @@
             </Setter>
         </Style>
 
+        <!-- Pill button: outline at rest, white when selected (ChipOn). -->
         <Style x:Key="Chip" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource ChipBg}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#17FFFFFF" />
+            <Setter Property="Foreground" Value="#D4D4D8" />
+            <Setter Property="FontFamily" Value="{DynamicResource SansMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="12,0" />
             <Setter Property="Margin" Value="3" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" CornerRadius="14" Background="{TemplateBinding Background}" Padding="0,7">
-                            <ContentPresenter HorizontalAlignment="Center" />
+                        <Border x:Name="root" CornerRadius="17" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+                            <Grid>
+                                <Border x:Name="hl" CornerRadius="17" Background="#12FFFFFF" Opacity="0" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Opacity" Value="0.85" />
+                                <Setter TargetName="hl" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="root" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="root" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource PressIn}" /></Trigger.EnterActions>
+                                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource PressOut}" /></Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -120,303 +243,394 @@
         </Style>
 
         <Style x:Key="ChipOn" TargetType="Button" BasedOn="{StaticResource Chip}">
-            <Setter Property="Background" Value="{DynamicResource Accent}" />
+            <Setter Property="Background" Value="#FAFAFA" />
+            <Setter Property="BorderBrush" Value="#FAFAFA" />
+            <Setter Property="Foreground" Value="#09090B" />
+        </Style>
+
+        <!-- Segmented control halves (sort CPU / Memory). -->
+        <Style x:Key="Seg" TargetType="Button" BasedOn="{StaticResource Chip}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+        </Style>
+        <Style x:Key="SegOn" TargetType="Button" BasedOn="{StaticResource Seg}">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+        </Style>
+
+        <!-- Small row action (End). -->
+        <Style x:Key="Mini" TargetType="Button" BasedOn="{StaticResource Chip}">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="BorderBrush" Value="#1AFFFFFF" />
+            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+        </Style>
+        <Style x:Key="MiniDanger" TargetType="Button" BasedOn="{StaticResource Mini}">
+            <Setter Property="Background" Value="{DynamicResource Danger}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Danger}" />
             <Setter Property="Foreground" Value="White" />
         </Style>
 
         <Style x:Key="Link" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="{DynamicResource SansMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="Transparent">
+                        <Border x:Name="root" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
                             <ContentPresenter />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="Field" TargetType="TextBox">
-            <Setter Property="Background" Value="{DynamicResource ChipBg}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text}" />
-            <Setter Property="CaretBrush" Value="{DynamicResource Text}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="6,5" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-
-        <Style x:Key="Footer" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource Card}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text}" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}"
-                                BorderBrush="{DynamicResource CardBorder}" BorderThickness="1">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Hover}" />
+                                <Setter TargetName="root" Property="Opacity" Value="0.8" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource PressIn}" /></Trigger.EnterActions>
+                                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource PressOut}" /></Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Text}" />
+            <Setter Property="FontFamily" Value="{DynamicResource Mono}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="root" CornerRadius="10" Background="#0AFFFFFF" BorderBrush="#1AFFFFFF" BorderThickness="1">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="8,0" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="root" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Footer pills (Settings / Quit). -->
+        <Style x:Key="Footer" TargetType="Button" BasedOn="{StaticResource Chip}">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="#08FFFFFF" />
+            <Setter Property="Foreground" Value="#E4E4E7" />
+        </Style>
     </Window.Resources>
 
-    <Grid Margin="14,12,14,14">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <!-- Double bezel: hairline ring, 4 px of tinted glass, then the panel. -->
+    <Border x:Name="Bezel" CornerRadius="8" BorderThickness="1" BorderBrush="#1FFFFFFF" Background="#0AFFFFFF" Padding="4">
+        <Border CornerRadius="6" Background="{DynamicResource Bg}" BorderThickness="0,1,0,0" BorderBrush="#10FFFFFF">
+            <Grid x:Name="Shell" Margin="16,14,16,12" RenderTransformOrigin="0.5,0.5">
+                <Grid.RenderTransform><TranslateTransform /></Grid.RenderTransform>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-        <!-- Logo -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
-            <TextBlock Text="&#xE7B3;" FontFamily="{StaticResource Icons}" FontSize="18" VerticalAlignment="Center"
-                       Foreground="{DynamicResource Accent}" Margin="0,0,8,0" />
-            <TextBlock Text="Vigil" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
-        </StackPanel>
+                <!-- Header: wordmark + live status -->
+                <Grid Margin="2,0,2,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" AutomationProperties.Name="Vigil"
+                                TextElement.FontFamily="{StaticResource SansSemi}" TextElement.FontWeight="SemiBold" TextElement.FontSize="21">
+                        <TextBlock Text="v" Margin="0,0,-0.5,0" />
+                        <Grid>
+                            <TextBlock Text="ı" />
+                            <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Accent}" HorizontalAlignment="Center"
+                                     VerticalAlignment="Top" Margin="0.5,4,0,0" />
+                        </Grid>
+                        <TextBlock Text="gil" Margin="-0.5,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Ellipse x:Name="HeaderDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" Visibility="Collapsed" />
+                        <TextBlock x:Name="HeaderStatus" Style="{StaticResource Axis}" Foreground="{DynamicResource SubText}" />
+                    </StackPanel>
+                </Grid>
 
-        <!-- Tab bar -->
-        <Border Grid.Row="1" CornerRadius="12" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardBorder}"
-                BorderThickness="1" Padding="3">
-            <UniformGrid Columns="5">
-                <RadioButton x:Name="AwakeTab" Style="{StaticResource Tab}" Content="&#xE708;" Tag="Keep awake"
-                             ToolTip="Keep awake" AutomationProperties.Name="Keep awake" Checked="Tab_Checked" />
-                <RadioButton x:Name="SystemTab" Style="{StaticResource Tab}" Content="&#xE7F4;" Tag="System"
-                             ToolTip="System" AutomationProperties.Name="System" Checked="Tab_Checked" />
-                <RadioButton x:Name="ProcTab" Style="{StaticResource Tab}" Content="&#xE71D;" Tag="Processes"
-                             ToolTip="Processes" AutomationProperties.Name="Processes" Checked="Tab_Checked" />
-                <RadioButton x:Name="NetTab" Style="{StaticResource Tab}" Content="&#xE774;" Tag="Network &amp; battery"
-                             ToolTip="Network &amp; battery" AutomationProperties.Name="Network and battery" Checked="Tab_Checked" />
-                <RadioButton x:Name="DiskTab" Style="{StaticResource Tab}" Content="&#xEDA2;" Tag="Disks"
-                             ToolTip="Disks" AutomationProperties.Name="Disks" Checked="Tab_Checked" />
-            </UniformGrid>
-        </Border>
-
-        <TextBlock x:Name="SectionTitle" Grid.Row="2" Margin="2,14,0,8" FontSize="11" FontWeight="SemiBold"
-                   Foreground="{DynamicResource SubText}" />
-
-        <!-- Card holding the selected page -->
-        <Border Grid.Row="3" CornerRadius="10" Background="{DynamicResource Card}" BorderBrush="{DynamicResource CardBorder}"
-                BorderThickness="1" Padding="14,14,14,6">
-            <ScrollViewer VerticalScrollBarVisibility="Hidden" Focusable="False">
-            <Grid Margin="0,0,0,8">
-                <!-- Keep awake -->
-                <StackPanel x:Name="AwakePage" Visibility="Collapsed">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="AwakeStatus" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <CheckBox x:Name="AwakeSwitch" Grid.Column="1" Style="{StaticResource Switch}"
-                                  AutomationProperties.Name="Keep awake" Click="AwakeSwitch_Click" />
-                    </Grid>
-                    <UniformGrid x:Name="Chips" Columns="4" Margin="-3,12,-3,0">
-                        <Button Style="{StaticResource Chip}" Tag="15" Content="15m" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="30" Content="30m" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="60" Content="1h" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="120" Content="2h" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="240" Content="4h" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="480" Content="8h" Click="Chip_Click" />
-                        <Button Style="{StaticResource Chip}" Tag="0" Content="∞" Click="Chip_Click" AutomationProperties.Name="Indefinitely" />
-                        <Button Style="{StaticResource Chip}" Tag="until" Content="Until…" Click="Chip_Click" />
+                <!-- Tabs: icons, one cobalt dot under the active one -->
+                <Grid Grid.Row="1" Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="1" />
+                    </Grid.RowDefinitions>
+                    <UniformGrid x:Name="TabGrid" Columns="6">
+                        <RadioButton x:Name="AwakeTab" Style="{StaticResource Tab}" Content="&#xE708;" Tag="0"
+                                     ToolTip="Keep awake" AutomationProperties.Name="Keep awake" Checked="Tab_Checked" />
+                        <RadioButton x:Name="DisplaysTab" Style="{StaticResource Tab}" Content="&#xE7F4;" Tag="1"
+                                     ToolTip="Displays" AutomationProperties.Name="Displays" Checked="Tab_Checked" />
+                        <RadioButton x:Name="SystemTab" Style="{StaticResource Tab}" Content="&#xE9D9;" Tag="2"
+                                     ToolTip="System" AutomationProperties.Name="System" Checked="Tab_Checked" />
+                        <RadioButton x:Name="ProcTab" Style="{StaticResource Tab}" Content="&#xE71D;" Tag="3"
+                                     ToolTip="Processes" AutomationProperties.Name="Processes" Checked="Tab_Checked" />
+                        <RadioButton x:Name="NetTab" Style="{StaticResource Tab}" Content="&#xE774;" Tag="4"
+                                     ToolTip="Network &amp; battery" AutomationProperties.Name="Network and battery" Checked="Tab_Checked" />
+                        <RadioButton x:Name="DiskTab" Style="{StaticResource Tab}" Content="&#xEDA2;" Tag="5"
+                                     ToolTip="Disks" AutomationProperties.Name="Disks" Checked="Tab_Checked" />
                     </UniformGrid>
-                    <StackPanel x:Name="UntilRow" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
-                        <TextBlock Text="Until" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBox x:Name="UntilBox" Style="{StaticResource Field}" Width="70"
-                                 AutomationProperties.Name="Until time, hours and minutes" />
-                        <Button x:Name="UntilStart" Style="{StaticResource Chip}" Content="Start" Padding="14,0"
-                                Click="UntilStart_Click" Margin="8,0,0,0" MinWidth="64" />
-                        <TextBlock x:Name="UntilError" Foreground="{DynamicResource Danger}" FontSize="12"
-                                   VerticalAlignment="Center" Margin="8,0,0,0" />
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0"
-                               Text="Click a chip to start. Click it again to stop." />
-                    <Border Style="{StaticResource Divider}" />
-                    <Button x:Name="OptionsToggle" Style="{StaticResource Link}" Content="›  Options"
-                            HorizontalAlignment="Left" Click="OptionsToggle_Click" />
-                    <StackPanel x:Name="OptionsPanel" Visibility="Collapsed" Margin="0,12,0,0">
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock Text="Keep display on" />
-                                <TextBlock Style="{StaticResource Muted}" Text="Applied whenever Keep awake is active" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <CheckBox x:Name="DisplaySwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="display"
-                                      AutomationProperties.Name="Keep display on" Click="Option_Click" />
+                    <Canvas Grid.Row="1" ClipToBounds="False">
+                        <Grid x:Name="TabDot" Width="10" Height="10" Canvas.Top="0">
+                            <Grid.RenderTransform><TranslateTransform /></Grid.RenderTransform>
+                            <Ellipse Fill="{DynamicResource Accent}" Opacity="0.18" />
+                            <Ellipse Width="4" Height="4" Fill="{DynamicResource Accent}" />
                         </Grid>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock Text="Only when plugged in" />
-                                <TextBlock Style="{StaticResource Muted}" Text="Pauses while on battery" TextWrapping="Wrap" />
+                    </Canvas>
+                    <Border Grid.Row="2" Background="{DynamicResource CardBorder}" />
+                </Grid>
+
+                <!-- Pages -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Hidden" Focusable="False" Margin="0,18,0,0">
+                    <Grid Margin="2,0,2,12">
+
+                        <!-- Keep awake -->
+                        <StackPanel x:Name="AwakePage" Visibility="Collapsed">
+                            <Grid>
+                                <TextBlock Style="{StaticResource Heading}" Text="Keep awake" Margin="0" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AwakeSwitch" Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                          AutomationProperties.Name="Keep awake" Click="AwakeSwitch_Click" />
+                            </Grid>
+                            <WrapPanel Margin="0,14,0,0">
+                                <TextBlock x:Name="AwakeBig" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="40"
+                                           Margin="0,0,10,0" VerticalAlignment="Bottom" />
+                                <TextBlock x:Name="AwakeStatus" Foreground="{DynamicResource SubText}" TextWrapping="Wrap"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,7" />
+                            </WrapPanel>
+                            <ProgressBar x:Name="AwakeBar" Style="{StaticResource Bar}" Foreground="{DynamicResource Accent}"
+                                         Margin="0,12,0,0" Visibility="Collapsed" />
+                            <UniformGrid x:Name="Chips" Columns="4" Margin="-3,16,-3,0" TextElement.FontFamily="{StaticResource MonoMedium}">
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="15" Content="15m" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="30" Content="30m" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="60" Content="1h" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="120" Content="2h" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="240" Content="4h" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="480" Content="8h" Click="Chip_Click" />
+                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="0" Content="∞" Click="Chip_Click"
+                                        AutomationProperties.Name="Indefinitely" />
+                                <Button Style="{StaticResource Chip}" Tag="until" Content="Until…" Click="Chip_Click" />
+                            </UniformGrid>
+                            <StackPanel x:Name="UntilRow" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                                <TextBlock Text="Until" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource SubText}" />
+                                <TextBox x:Name="UntilBox" Style="{StaticResource Field}" Width="76"
+                                         AutomationProperties.Name="Until time, hours and minutes" />
+                                <Button x:Name="UntilStart" Style="{StaticResource Chip}" Content="Start" Margin="8,0,0,0" MinWidth="64"
+                                        Click="UntilStart_Click" />
+                                <TextBlock x:Name="UntilError" Foreground="{DynamicResource Danger}" FontSize="12"
+                                           VerticalAlignment="Center" Margin="8,0,0,0" />
                             </StackPanel>
-                            <CheckBox x:Name="PluggedSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="plugged"
-                                      AutomationProperties.Name="Only when plugged in" Click="Option_Click" />
-                        </Grid>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock Text="Pause when locked" />
-                                <TextBlock Style="{StaticResource Muted}" Text="Pauses while the PC is locked (Win+L)" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,12,0,0"
+                                       Text="Click a chip to start. Click it again to stop." />
+                            <Border Style="{StaticResource Divider}" Margin="0,18,0,14" />
+                            <Button x:Name="OptionsToggle" Style="{StaticResource Link}" Content="›  Options"
+                                    HorizontalAlignment="Left" Click="OptionsToggle_Click" />
+                            <StackPanel x:Name="OptionsPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                                <Grid Margin="0,6,0,0">
+                                    <StackPanel Margin="0,0,52,0">
+                                        <TextBlock Text="Keep display on" FontSize="14" />
+                                        <TextBlock Style="{StaticResource Muted}" Text="Screen stays lit too" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="DisplaySwitch" Style="{StaticResource Switch}" Tag="display" HorizontalAlignment="Right"
+                                              AutomationProperties.Name="Keep display on" Click="Option_Click" />
+                                </Grid>
+                                <Border Style="{StaticResource Divider}" Margin="0,11" />
+                                <Grid>
+                                    <StackPanel Margin="0,0,52,0">
+                                        <TextBlock Text="Only when plugged in" FontSize="14" />
+                                        <TextBlock Style="{StaticResource Muted}" Text="Pauses on battery" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="PluggedSwitch" Style="{StaticResource Switch}" Tag="plugged" HorizontalAlignment="Right"
+                                              AutomationProperties.Name="Only when plugged in" Click="Option_Click" />
+                                </Grid>
+                                <Border Style="{StaticResource Divider}" Margin="0,11" />
+                                <Grid>
+                                    <StackPanel Margin="0,0,52,0">
+                                        <TextBlock Text="Pause when locked" FontSize="14" />
+                                        <TextBlock Style="{StaticResource Muted}" Text="While the PC is locked (Win+L)" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="LockedSwitch" Style="{StaticResource Switch}" Tag="locked" HorizontalAlignment="Right"
+                                              AutomationProperties.Name="Pause when locked" Click="Option_Click" />
+                                </Grid>
+                                <Border Style="{StaticResource Divider}" Margin="0,11" />
+                                <Grid>
+                                    <StackPanel Margin="0,0,52,0">
+                                        <TextBlock Text="Turn on when Vigil starts" FontSize="14" />
+                                        <TextBlock Style="{StaticResource Muted}" Text="Starts indefinitely at launch" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="StartupSwitch" Style="{StaticResource Switch}" Tag="startup" HorizontalAlignment="Right"
+                                              AutomationProperties.Name="Turn on when Vigil starts" Click="Option_Click" />
+                                </Grid>
+                                <Border Style="{StaticResource Divider}" Margin="0,11" />
+                                <TextBlock Text="While these apps are open" FontSize="14" />
+                                <TextBlock Style="{StaticResource Muted}" Text="Keep awake turns on by itself" Margin="0,2,0,0" />
+                                <WrapPanel x:Name="AppList" Margin="-3,8,-3,0" />
                             </StackPanel>
-                            <CheckBox x:Name="LockedSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="locked"
-                                      AutomationProperties.Name="Pause when locked" Click="Option_Click" />
-                        </Grid>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock Text="Turn on when Vigil starts" />
-                                <TextBlock Style="{StaticResource Muted}" Text="Starts indefinitely at launch" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <CheckBox x:Name="StartupSwitch" Grid.Column="1" Style="{StaticResource Switch}" Tag="startup"
-                                      AutomationProperties.Name="Turn on when Vigil starts" Click="Option_Click" />
-                        </Grid>
-                        <TextBlock Text="While these apps are open" />
-                        <TextBlock Style="{StaticResource Muted}" Text="Keep awake turns on by itself" />
-                        <WrapPanel x:Name="AppList" Margin="-3,6,-3,0" />
-                    </StackPanel>
-                </StackPanel>
+                        </StackPanel>
 
-                <!-- System -->
-                <StackPanel x:Name="SystemPage" Visibility="Collapsed">
-                    <TextBlock Style="{StaticResource Heading}" Text="Hardware usage" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="CPU" VerticalAlignment="Center" />
-                        <ProgressBar x:Name="CpuBar" Grid.Column="1" Style="{StaticResource Bar}" />
-                        <TextBlock x:Name="CpuText" Grid.Column="2" Style="{StaticResource Value}" />
-                    </Grid>
-                    <local:Sparkline x:Name="CpuGraph" Height="50" Margin="0,8,0,0"
-                                     Stroke="{DynamicResource Accent}" Guide="{DynamicResource SubText}" />
+                        <!-- Displays -->
+                        <local:DisplaysPage x:Name="DisplaysPage" Visibility="Collapsed" />
 
-                    <Border Style="{StaticResource Divider}" />
+                        <!-- System -->
+                        <StackPanel x:Name="SystemPage" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Heading}" Text="System" Margin="0,0,0,16" />
+                            <Grid>
+                                <TextBlock Style="{StaticResource Title}" Text="Processor" />
+                                <TextBlock x:Name="CpuText" Style="{StaticResource Reading}" HorizontalAlignment="Right" />
+                            </Grid>
+                            <local:DotMatrix x:Name="CpuGraph" Height="34" Margin="0,12,0,0"
+                                             AutomationProperties.Name="CPU load over the last minute" />
+                            <Grid Margin="0,8,0,0">
+                                <TextBlock Style="{StaticResource Axis}" Text="−60 s" />
+                                <TextBlock x:Name="CpuPeak" Style="{StaticResource Axis}" HorizontalAlignment="Center" />
+                                <TextBlock Style="{StaticResource Axis}" Text="now" HorizontalAlignment="Right" />
+                            </Grid>
 
-                    <TextBlock Style="{StaticResource Heading}" Text="Memory" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="40" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="RAM" VerticalAlignment="Center" />
-                        <ProgressBar x:Name="RamBar" Grid.Column="1" Style="{StaticResource Bar}" />
-                        <TextBlock x:Name="RamText" Grid.Column="2" Style="{StaticResource Value}" />
-                    </Grid>
-                    <local:Sparkline x:Name="RamGraph" Height="50" Margin="0,8,0,0"
-                                     Stroke="{DynamicResource Teal}" Guide="{DynamicResource SubText}" />
-                </StackPanel>
+                            <Border Style="{StaticResource Divider}" />
 
-                <!-- Processes -->
-                <StackPanel x:Name="ProcPage" Visibility="Collapsed">
-                    <Grid Margin="0,0,0,8">
-                        <TextBlock Style="{StaticResource Heading}" Text="Top apps" VerticalAlignment="Center" Margin="0" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="SortCpu" Style="{StaticResource Chip}" Content="CPU" MinWidth="54" Click="Sort_Click"
-                                    AutomationProperties.Name="Sort by CPU" />
-                            <Button x:Name="SortRam" Style="{StaticResource Chip}" Content="RAM" MinWidth="54" Click="Sort_Click"
-                                    AutomationProperties.Name="Sort by memory" />
+                            <Grid>
+                                <TextBlock Style="{StaticResource Title}" Text="Memory" />
+                                <TextBlock x:Name="RamText" Style="{StaticResource Reading}" HorizontalAlignment="Right" />
+                            </Grid>
+                            <ProgressBar x:Name="RamBar" Style="{StaticResource Bar}" Height="8" Margin="0,12,0,0" />
+                            <Grid Margin="0,8,0,0">
+                                <TextBlock x:Name="RamDetail" Style="{StaticResource Axis}" />
+                                <TextBlock x:Name="RamLevel" Style="{StaticResource Axis}" HorizontalAlignment="Right" />
+                            </Grid>
+
+                            <Border Style="{StaticResource Divider}" />
+
+                            <UniformGrid Columns="2">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Muted}" Text="Download" />
+                                    <TextBlock x:Name="SysDown" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Muted}" Text="Battery" />
+                                    <TextBlock x:Name="SysBat" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+
+                        <!-- Processes -->
+                        <StackPanel x:Name="ProcPage" Visibility="Collapsed">
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock Style="{StaticResource Heading}" Text="Top apps" VerticalAlignment="Center" Margin="0" />
+                                <Border HorizontalAlignment="Right" CornerRadius="15" BorderBrush="#17FFFFFF" BorderThickness="1" Padding="2">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="SortCpu" Style="{StaticResource SegOn}" Content="CPU" Click="Sort_Click"
+                                                AutomationProperties.Name="Sort by CPU" />
+                                        <Button x:Name="SortRam" Style="{StaticResource Seg}" Content="Memory" Click="Sort_Click"
+                                                AutomationProperties.Name="Sort by memory" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Grid Height="22">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="52" />
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="50" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource Muted}" FontSize="11" Text="App" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource Axis}" Text="cpu" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource Axis}" Text="ram" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                            <StackPanel x:Name="ProcList" />
+                            <TextBlock x:Name="ProcStatus" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,10,0,0"
+                                       Text="Click End twice to close an app. System processes can't be ended." />
+                        </StackPanel>
+
+                        <!-- Network & battery -->
+                        <StackPanel x:Name="NetPage" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Heading}" Text="Network" />
+                            <UniformGrid Columns="2">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Muted}" Text="Download" />
+                                    <TextBlock x:Name="DownText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Muted}" Text="Upload" />
+                                    <TextBlock x:Name="UpText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </UniformGrid>
+                            <local:SpeedTestView x:Name="SpeedTestBlock" Margin="0,14,0,0" />
+
+                            <Border Style="{StaticResource Divider}" />
+
+                            <Grid>
+                                <TextBlock Style="{StaticResource Heading}" Text="Battery" />
+                                <TextBlock x:Name="BatHealth" Style="{StaticResource Axis}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                           Margin="0,2,0,0" Visibility="Collapsed" />
+                            </Grid>
+                            <Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="BatPct" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20"
+                                               VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <Border x:Name="BatPill" CornerRadius="10" Padding="8,2,10,3" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="BatDot" Width="6" Height="6" VerticalAlignment="Center" Margin="0,1,6,0" />
+                                            <TextBlock x:Name="BatState" FontSize="12" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock x:Name="BatTime" Style="{StaticResource Axis}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                            <ProgressBar x:Name="BatBar" Style="{StaticResource Bar}" Margin="0,12,0,0" />
+
+                            <Border Style="{StaticResource Divider}" />
+
+                            <TextBlock Style="{StaticResource Heading}" Text="Bluetooth" />
+                            <StackPanel x:Name="DeviceList" />
+
+                            <Border Style="{StaticResource Divider}" />
+                            <local:AlertsView x:Name="AlertsBlock" />
+                        </StackPanel>
+
+                        <!-- Disks -->
+                        <StackPanel x:Name="DiskPage" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Heading}" Text="Drives" Margin="0,0,0,14" />
+                            <StackPanel x:Name="DiskList" />
                         </StackPanel>
                     </Grid>
-                    <StackPanel x:Name="ProcList" />
-                    <TextBlock x:Name="ProcStatus" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                </StackPanel>
+                </ScrollViewer>
 
-                <!-- Network & battery -->
-                <StackPanel x:Name="NetPage" Visibility="Collapsed">
-                    <TextBlock Style="{StaticResource Heading}" Text="Network" />
-                    <Grid Margin="0,0,0,4">
-                        <TextBlock Text="↓  Download" />
-                        <TextBlock x:Name="DownText" Style="{StaticResource Value}" />
-                    </Grid>
-                    <Grid>
-                        <TextBlock Text="↑  Upload" />
-                        <TextBlock x:Name="UpText" Style="{StaticResource Value}" />
-                    </Grid>
-                    <local:Sparkline x:Name="NetGraph" Height="50" Margin="0,8,0,0" Max="0"
-                                     Stroke="{DynamicResource Accent}" Guide="{DynamicResource SubText}" />
-
-                    <Border Style="{StaticResource Divider}" />
-
-                    <TextBlock Style="{StaticResource Heading}" Text="Battery" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="56" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Charge" VerticalAlignment="Center" />
-                        <ProgressBar x:Name="BatBar" Grid.Column="1" Style="{StaticResource Bar}" />
-                        <TextBlock x:Name="BatPct" Grid.Column="2" Style="{StaticResource Value}" />
-                    </Grid>
-                    <Grid Margin="0,10,0,0">
-                        <Border x:Name="BatPill" HorizontalAlignment="Left" CornerRadius="10" Padding="8,2,10,3">
-                            <StackPanel Orientation="Horizontal">
-                                <Ellipse x:Name="BatDot" Width="7" Height="7" VerticalAlignment="Center" Margin="0,1,6,0" />
-                                <TextBlock x:Name="BatState" FontWeight="SemiBold" />
-                            </StackPanel>
-                        </Border>
-                        <TextBlock x:Name="BatTime" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                    </Grid>
-
-                    <Border Style="{StaticResource Divider}" />
-
-                    <TextBlock Style="{StaticResource Heading}" Text="Bluetooth devices" />
-                    <StackPanel x:Name="DeviceList" />
-                </StackPanel>
-
-                <!-- Disks -->
-                <StackPanel x:Name="DiskPage" Visibility="Collapsed">
-                    <TextBlock Style="{StaticResource Heading}" Text="Drives" />
-                    <StackPanel x:Name="DiskList" />
-                </StackPanel>
+                <!-- Footer -->
+                <Grid Grid.Row="3" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="SettingsButton" Style="{StaticResource Footer}" Click="Settings_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,1,8,0" />
+                            <TextBlock Text="Settings" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource Footer}" Click="Quit_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,1,8,0" />
+                            <TextBlock Text="Quit" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
             </Grid>
-            </ScrollViewer>
         </Border>
-
-        <!-- Footer -->
-        <UniformGrid Grid.Row="4" Columns="2" Margin="0,12,0,0">
-            <Button x:Name="SettingsButton" Style="{StaticResource Footer}" Margin="0,0,6,0" Click="Settings_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" VerticalAlignment="Center" Margin="0,1,8,0" />
-                    <TextBlock Text="Settings" FontWeight="SemiBold" />
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource Footer}" Margin="6,0,0,0" Click="Quit_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" VerticalAlignment="Center" Margin="0,1,8,0" />
-                    <TextBlock Text="Quit" FontWeight="SemiBold" />
-                </StackPanel>
-            </Button>
-        </UniformGrid>
-    </Grid>
+    </Border>
 </Window>

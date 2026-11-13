@@ -175,11 +175,24 @@ To keep merges small while the design pass rewrites `PanelWindow.xaml`: each new
 
 As specified in v0.2 §4 above: per-screen cards (built-in brightness via WMI; external brightness / contrast / volume via DDC/CI), refresh-rate buttons, display mode (Extend · Duplicate · PC screen only · Second screen only via `SetDisplayConfig`), Turn screens off.
 
+How it was built (and where it differs):
+- Tab order: Keep awake · **Displays** · System · Processes · Network & battery · Disks. Displays takes the monitor glyph (`E7F4`); System moves to `E9D9`.
+- One block per screen inside the page card (not one card each), so it sits inside the panel's existing single-card layout.
+- Built-in panel: WMI gives brightness without saying which screen it is. If exactly one screen doesn't answer DDC/CI, that screen gets the brightness slider and is titled "Built-in display". Otherwise a separate "Built-in display" block with brightness only.
+- Refresh-rate chips only appear when the current resolution has more than one rate; otherwise the rate is shown next to the resolution.
+- Display mode chips highlight the current Win+P mode (read with `QueryDisplayConfig`).
+- Turn screens off waits 500 ms so the click itself doesn't wake them.
+- DDC reads are tried twice (real monitors drop the odd reply); writes leave 50 ms between commands (`Displays.DdcGapMs`).
+- Screens are read when the tab opens and monitor handles are released when it closes (tab switch or panel hide). Nothing is polled in the background.
+- Self-test is read-only: it loads the real displays (CI's virtual display has no DDC/WMI, so it shows the unsupported state), then renders a made-up layout (DDC monitor, silent monitor, laptop card). It never changes mode, refresh rate, brightness or screen power.
+- Only real hardware can verify: DDC/CI on actual monitors, WMI brightness on the laptop panel, 144 Hz switching, Win+P mode switching, screens off.
+
 ### 2. Battery health (`feature/battery-alerts-speedtest`)
 
 - In the battery section: **health %** = full-charge capacity ÷ design capacity, both in mWh, plus **charge cycles** if the battery reports them.
 - Source: battery driver queries (`IOCTL_BATTERY_QUERY_INFORMATION` on the battery device, no admin) or WMI `root\WMI` battery classes. Read on panel open, not every second.
 - Hidden on PCs without a battery.
+- Built: `IOCTL_BATTERY_QUERY_INFORMATION` via SetupAPI (no WMI, no new package), read each time the panel opens. Shown as "Health 86% · 312 cycles" under the battery state; cycles left out when the battery reports 0/unknown; hidden when capacities are unknown or relative (percent-only drivers).
 
 ### 3. Alerts (`feature/battery-alerts-speedtest`)
 
@@ -191,11 +204,19 @@ Windows notifications from the tray icon, each with an on/off switch in Settings
 
 Each alert fires once, then only again after the condition has cleared. No network.
 
+Built: `NotifyIcon.ShowBalloonTip` (shows as a toast on Windows 10/11), checked on the existing 1 s tick from data `Stats` already has. Switches live in a collapsible **Alerts** block at the bottom of the Network & battery tab (not the Settings menu). One switch covers both CPU and RAM. Charge limit chips: 80 / 90 / 100 %. Defaults: all on except "battery charged". Saved in `settings.json`.
+
 ### 4. Network speed test (`feature/battery-alerts-speedtest`)
 
 - **Run speed test** button in Network & battery: download speed, upload speed, latency (ping).
 - Uses Cloudflare's public speed-test endpoints (`speed.cloudflare.com`), no account or key. **Second network exception** (after updates): only runs when clicked, shows how much data it will use (~30–100 MB) and can be cancelled.
+- Built: ping = median of 8 empty requests (first dropped: DNS/TLS). Download 0.1 → 1 → 10 → 25 MB and upload 0.1 → 1 → 10 → 20 MB, smallest first; a phase stops when the next size wouldn't fit ~6 s at the speed seen so far, so the test takes ~10–15 s and a slow line uses only a few MB. Result is the best Mbps seen. Shows "Uses up to about 67 MB of data" before running; live values while running.
 
 ### Dropped
 
 GPU usage, per-core CPU grid, disk activity, memory-pressure pill, uptime: removed from the plan.
+
+### Design pass + automatic update notifications (`feature/design`)
+
+- **New look**, recorded in [DESIGN.md](DESIGN.md): zinc-black acrylic double-bezel panel, Geist + Geist Mono embedded, lowercase `vigil` wordmark, sliding cobalt tab dot, CPU history as a dot field, hatch headroom in bars, pill chips. One dark palette (the light theme is dropped: the design is dark-native).
+- **Automatic update check** (user request, changes the network rule): when "Check for updates automatically" is on (default), Vigil checks GitHub Releases 2 minutes after starting and then every 6 hours. A newer release it hasn't announced yet shows a Windows notification; clicking it opens the usual update prompt. Failures are silent. Network calls are now: this check, the manual check, and the speed test on click.

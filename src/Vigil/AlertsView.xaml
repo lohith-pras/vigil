@@ -1,0 +1,64 @@
+<!-- Alert switches. Hosted in the Network & battery tab; uses the panel's styles and brushes. -->
+<UserControl x:Class="Vigil.AlertsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <Button x:Name="Toggle" Style="{DynamicResource Link}" Content="›  Alerts" HorizontalAlignment="Left"
+                Click="Toggle_Click" />
+        <StackPanel x:Name="Body" Visibility="Collapsed" Margin="0,12,0,0">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="Battery low" />
+                    <TextBlock Style="{DynamicResource Muted}" Text="At 20% and 10%, while on battery" TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox x:Name="LowSwitch" Grid.Column="1" Style="{DynamicResource Switch}"
+                          AutomationProperties.Name="Battery low alert" Click="Switch_Click" />
+            </Grid>
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="Battery charged" />
+                    <TextBlock Style="{DynamicResource Muted}" Text="When it reaches the limit, while plugged in" TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox x:Name="ChargedSwitch" Grid.Column="1" Style="{DynamicResource Switch}"
+                          AutomationProperties.Name="Battery charged alert" Click="Switch_Click" />
+            </Grid>
+            <UniformGrid x:Name="Limits" Columns="3" Margin="-3,0,-3,12">
+                <Button Tag="80" Content="80%" Click="Limit_Click" AutomationProperties.Name="Charge limit 80 percent" />
+                <Button Tag="90" Content="90%" Click="Limit_Click" AutomationProperties.Name="Charge limit 90 percent" />
+                <Button Tag="100" Content="100%" Click="Limit_Click" AutomationProperties.Name="Charge limit 100 percent" />
+            </UniformGrid>
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="Drive almost full" />
+                    <TextBlock Style="{DynamicResource Muted}" Text="Above 90% used" TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox x:Name="DiskSwitch" Grid.Column="1" Style="{DynamicResource Switch}"
+                          AutomationProperties.Name="Drive almost full alert" Click="Switch_Click" />
+            </Grid>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="CPU or RAM busy" />
+                    <TextBlock Style="{DynamicResource Muted}" Text="Above 90% for 2 minutes" TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox x:Name="BusySwitch" Grid.Column="1" Style="{DynamicResource Switch}"
+                          AutomationProperties.Name="CPU or RAM busy alert" Click="Switch_Click" />
+            </Grid>
+        </StackPanel>
+    </StackPanel>
+</UserControl>
