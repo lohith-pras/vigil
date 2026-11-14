@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Threading.Tasks;
 using Forms = System.Windows.Forms;
 
 namespace Vigil;
@@ -29,8 +30,6 @@ sealed class Stats
     public BatteryHealth? Health;            // read on panel open only (RefreshHealth)
 
     public readonly Queue<double> CpuHistory = new();
-    public readonly Queue<double> RamHistory = new();
-    public readonly Queue<double> DownHistory = new();
 
     public double RamFraction => RamTotal > 0 ? (double)RamUsed / RamTotal : 0;
 
@@ -48,17 +47,23 @@ sealed class Stats
         SampleRam();
         SampleNetwork();
         SampleBattery();
-        if (_tick % 30 == 0) SampleDisks(); // disk space barely moves; spec allows 30 s
-        if (_tick % 60 == 0) RefreshDevices();
+        if (_tick % 30 == 0) SampleDisks(); // disk space barely moves; spec allows 30 s (also feeds the drive-full alert)
+        // Bluetooth devices: only the panel shows them, so Tray refreshes them while it's open, not here.
         _tick++;
     }
 
     public void RefreshDisks() => SampleDisks();
 
-    public void RefreshDevices()
+    bool _readingDevices;
+
+    /// <summary>Walks every device on the PC, so it runs off the UI thread; Devices updates when it's done.</summary>
+    public async void RefreshDevices()
     {
-        try { Devices = BluetoothBatteries.Read(); }
+        if (_readingDevices) return;
+        _readingDevices = true;
+        try { Devices = await Task.Run(() => BluetoothBatteries.Read()); }
         catch (Exception) { Devices = Array.Empty<DeviceBattery>(); } // never let a device query take the app down
+        finally { _readingDevices = false; }
     }
 
     public void RefreshHealth()
@@ -88,17 +93,17 @@ sealed class Stats
         if (!Native.GlobalMemoryStatusEx(ref m)) return;
         RamTotal = m.ullTotalPhys;
         RamUsed = m.ullTotalPhys - m.ullAvailPhys;
-        Push(RamHistory, RamFraction);
     }
 
     void SampleNetwork()
     {
-        // Adapters change rarely; re-list every 30 s and restart the baseline so a new adapter's
-        // lifetime byte count doesn't show up as one giant spike.
+        // Adapters change rarely; re-list every 30 s. Only when the set changed, restart the baseline so a
+        // new adapter's lifetime byte count doesn't show up as one giant spike.
         if (_tick % 30 == 0)
         {
-            _nics = ActiveAdapters();
-            _netStamp = 0;
+            var nics = ActiveAdapters();
+            if (!nics.Select(n => n.Id).SequenceEqual(_nics.Select(n => n.Id))) _netStamp = 0;
+            _nics = nics;
         }
 
         long rx = 0, tx = 0;
@@ -128,7 +133,6 @@ sealed class Stats
             Down = Up = 0;
         }
         _rx = rx; _tx = tx; _netStamp = now;
-        Push(DownHistory, Down);
     }
 
     // ponytail: name-based filter for virtual adapters. Add a keyword here if some VPN/VM adapter slips through

@@ -44,7 +44,7 @@ public partial class DisplaysPage : UserControl
         try
         {
             var (screens, mode) = await Task.Run(() => (Displays.Load(), Displays.CurrentMode()));
-            if (gen != _gen) { Displays.Release(screens); return; }
+            if (gen != _gen) { _ = Task.Run(() => Displays.Release(screens)); return; } // Release waits on the DDC lock: never on the UI thread
             Show(screens, mode);
         }
         catch (Exception e)

@@ -56,7 +56,7 @@ sealed class Tray : IDisposable
     readonly Dispatcher _ui = Dispatcher.CurrentDispatcher;
 
     PanelWindow? _panel;
-    DateTime _panelHiddenAt;
+    long _panelHiddenAt = long.MinValue / 2; // Environment.TickCount64, so a clock change can't block the tray click
     IntPtr _hicon;
     string _iconKey = "";
     int _tick;
@@ -116,8 +116,9 @@ sealed class Tray : IDisposable
         _timer.Start();
 
         // Background update check: 2 min after start, then every 6 h, only while the option is on.
-        _icon.BalloonTipClicked += (_, _) => { if (_balloonIsUpdate) CheckForUpdates(); };
-        _icon.BalloonTipClosed += (_, _) => _balloonIsUpdate = false;
+        // No BalloonTipClosed handler: the close event of a replaced notification can arrive after the
+        // next one is shown and would wipe its action. Every Notify overwrites the slot instead.
+        _icon.BalloonTipClicked += (_, _) => _onBalloonClick?.Invoke();
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
         _updateTimer.Tick += async (_, _) =>
         {
@@ -128,7 +129,14 @@ sealed class Tray : IDisposable
     }
 
     readonly DispatcherTimer _updateTimer;
-    bool _balloonIsUpdate;
+    Action? _onBalloonClick; // what clicking the latest notification does; null = nothing
+
+    /// <summary>Showing a notification also decides what clicking it does.</summary>
+    void Notify(string title, string text, Forms.ToolTipIcon icon, int ms, Action? onClick = null)
+    {
+        _onBalloonClick = onClick;
+        _icon.ShowBalloonTip(ms, title, text, icon); // Windows 10/11 shows it as a toast
+    }
 
     /// <summary>Quiet check: a notification only when a newer release exists and hasn't been announced yet.</summary>
     async System.Threading.Tasks.Task BackgroundUpdateCheck()
@@ -142,9 +150,8 @@ sealed class Tray : IDisposable
             if (_settings.AnnouncedVersion == v) return;
             _settings.AnnouncedVersion = v;
             _settings.Save();
-            _balloonIsUpdate = true;
-            _icon.ShowBalloonTip(15_000, $"Vigil {v} is available",
-                $"You have {Updater.Current}. Click to update; Vigil restarts by itself.", Forms.ToolTipIcon.Info);
+            Notify($"Vigil {v} is available", $"You have {Updater.Current}. Click to update; Vigil restarts by itself.",
+                   Forms.ToolTipIcon.Info, 15_000, CheckForUpdates);
         }
         catch (Exception) { } // offline or rate-limited: try again next round, never bother the user
     }
@@ -163,16 +170,19 @@ sealed class Tray : IDisposable
         // ponytail: battery state from the 1 s sample; app list re-checked every 5 s.
         _awake.Tick(pluggedIn: _stats.Battery.PluggedIn || !_stats.Battery.Present, checkApps: _tick % 5 == 0);
         foreach (var (title, text) in _alerts.Check(_stats.Battery, _stats.Disks, _stats.Cpu, _stats.RamFraction))
-        {
-            _balloonIsUpdate = false; // clicking an alert must not start an update
-            _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.Warning); // Windows 10/11 shows it as a toast
-        }
-        if (_tick++ % 2 == 0)
+            Notify(title, text, Forms.ToolTipIcon.Warning, 10_000);
+        if (_tick % 2 == 0)
         {
             RenderIcon();
             UpdateTooltip();
         }
-        if (_panel?.IsVisible == true) _panel.Refresh();
+        if (_panel?.IsVisible == true)
+        {
+            // Only the panel shows Bluetooth batteries (a walk over every device): read on open, then each minute while open.
+            if (_tick % 60 == 0) _stats.RefreshDevices();
+            _panel.Refresh();
+        }
+        _tick++;
     }
 
     void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
@@ -186,7 +196,7 @@ sealed class Tray : IDisposable
 
     void OnPanelHidden()
     {
-        _panelHiddenAt = DateTime.UtcNow;
+        _panelHiddenAt = Environment.TickCount64;
         // A few seconds after the panel closes, give its memory back to Windows (unless it reopened).
         _trim ??= new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
         {
@@ -200,14 +210,25 @@ sealed class Tray : IDisposable
         _trim.Start();
     }
 
-    internal void ShowPanelForTest()
+    PanelWindow Panel()
     {
         if (_panel is null)
         {
             _panel = new PanelWindow(_stats, _awake, _quit, this);
             _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
         }
-        _panel.ShowAt(new System.Drawing.Point(600, 500));
+        return _panel;
+    }
+
+    internal void ShowPanelForTest() => ShowPanel(new System.Drawing.Point(600, 500));
+
+    /// <summary>Read what only the panel shows (so it isn't sampled while closed), then open it.</summary>
+    void ShowPanel(System.Drawing.Point at)
+    {
+        _stats.RefreshDisks();
+        _stats.RefreshDevices();
+        _stats.RefreshHealth();
+        Panel().ShowAt(at);
     }
 
     internal void HidePanelForTest() => _panel?.Hide();
@@ -215,18 +236,10 @@ sealed class Tray : IDisposable
     void TogglePanel()
     {
         // Clicking the tray icon first deactivates (and hides) an open panel; don't reopen it right away.
-        if ((DateTime.UtcNow - _panelHiddenAt).TotalMilliseconds < 300) return;
+        if (Environment.TickCount64 - _panelHiddenAt < 300) return;
         if (_panel?.IsVisible == true) { _panel.Hide(); return; }
 
-        if (_panel is null)
-        {
-            _panel = new PanelWindow(_stats, _awake, _quit, this);
-            _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
-        }
-        _stats.RefreshDisks();
-        _stats.RefreshDevices();
-        _stats.RefreshHealth();
-        _panel.ShowAt(Forms.Cursor.Position);
+        ShowPanel(Forms.Cursor.Position);
     }
 
     void RenderIcon()
@@ -358,6 +371,7 @@ sealed class Tray : IDisposable
 
     void UpdateTooltip()
     {
+        if (_updating) return; // keep "checking for updates… / downloading…" on the icon until it's over
         var s = _stats;
         string text = $"CPU {s.Cpu * 100:0}% · RAM {Fmt.Gb(s.RamUsed)}/{s.RamTotal / 1073741824.0:0} GB · ↓ {Fmt.Rate(s.Down)} ↑ {Fmt.Rate(s.Up)}";
         if (s.Battery.Present) text += $" · 🔋 {s.Battery.Percent * 100:0}%";

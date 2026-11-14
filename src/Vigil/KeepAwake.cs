@@ -18,11 +18,15 @@ namespace Vigil;
 /// </summary>
 sealed class KeepAwake
 {
-    // ---- manual session ----
-    public bool Active { get; private set; }
-    public TimeSpan? Duration { get; private set; }   // chip that started it; null = indefinite
-    public DateTime? UntilTime { get; private set; }  // set when started with "Until…" (local time)
-    DateTime _untilUtc;
+    // ---- manual session: null = off. One value, so "on", "how long" and "until when" can't disagree. ----
+    // Chip sessions end on the uptime clock (EndsTick, Environment.TickCount64: counts through sleep, ignores
+    // clock changes). "Until…" sessions end at a wall-clock time, which is what they mean.
+    sealed record Session(TimeSpan? Duration, DateTime? UntilTime, long EndsTick);
+    Session? _session;
+
+    public bool Active => _session is not null;
+    public TimeSpan? Duration => _session?.Duration;    // chip that started it; null = indefinite
+    public DateTime? UntilTime => _session?.UntilTime;  // set when started with "Until…" (local time)
 
     // ---- options (saved in settings.json) ----
     bool _displayOn, _onlyPlugged, _pauseLocked;
@@ -46,17 +50,17 @@ sealed class KeepAwake
         : null;
     public bool Holding => Wanted && PausedReason is null;
 
-    public TimeSpan? Remaining => Active && Duration is not null ? _untilUtc - DateTime.UtcNow : null;
+    public TimeSpan? Remaining =>
+        _session is not { Duration: not null } s ? null
+        : s.UntilTime is { } until ? until.ToUniversalTime() - DateTime.UtcNow
+        : TimeSpan.FromMilliseconds(s.EndsTick - Environment.TickCount64);
 
     public event Action? Changed;
     uint _applied; // last flags sent to Windows (0 = never)
 
     public void Start(TimeSpan? duration)
     {
-        Active = true;
-        Duration = duration;
-        UntilTime = null;
-        if (duration is { } d) _untilUtc = DateTime.UtcNow + d;
+        _session = new(duration, null, duration is { } d ? Environment.TickCount64 + (long)d.TotalMilliseconds : 0);
         Update();
     }
 
@@ -65,30 +69,20 @@ sealed class KeepAwake
     {
         var until = DateTime.Today + timeOfDay;
         if (until <= DateTime.Now) until = until.AddDays(1);
-        Active = true;
-        UntilTime = until;
-        Duration = until - DateTime.Now;
-        _untilUtc = until.ToUniversalTime();
+        _session = new(until - DateTime.Now, until, 0);
         Update();
     }
 
     public void Stop()
     {
-        Active = false;
-        Duration = null;
-        UntilTime = null;
+        _session = null;
         Update();
     }
 
     /// <summary>Called every second. Ends timed sessions, tracks power and watched apps.</summary>
     public void Tick(bool pluggedIn, bool checkApps)
     {
-        if (Remaining is { } r && r <= TimeSpan.Zero)
-        {
-            Active = false;
-            Duration = null;
-            UntilTime = null;
-        }
+        if (Remaining <= TimeSpan.Zero) _session = null;
         OnBattery = !pluggedIn;
         if (checkApps) RunningApp = FindRunningApp();
         Update();
@@ -154,7 +148,7 @@ sealed class Settings
         a.PauseWhenLocked = PauseWhenLocked;
         a.OnAtStartup = KeepAwakeOnStartup;
         a.WatchApps.Clear();
-        a.WatchApps.AddRange(WatchApps);
+        a.WatchApps.AddRange(WatchApps ?? new()); // "WatchApps": null in a hand-edited file
     }
 
     /// <summary>Copy options from the live object; true if anything changed.</summary>
@@ -183,7 +177,10 @@ sealed class Settings
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this));
+            // Write beside, then swap: a power cut mid-write can't leave an empty settings file.
+            string tmp = FilePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(this));
+            File.Move(tmp, FilePath, overwrite: true);
         }
         catch { } // a settings write failing must never take the app down
     }
@@ -206,25 +203,31 @@ static class Startup
         }
         set
         {
-            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (value) key.SetValue(Name, Command);
-            else key.DeleteValue(Name, throwOnMissingValue: false);
+            try
+            {
+                using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+                if (value) key.SetValue(Name, Command);
+                else key.DeleteValue(Name, throwOnMissingValue: false);
+            }
+            catch (Exception) { } // registry locked down (policy, antivirus): the menu tick shows it didn't take
         }
     }
 
     /// <summary>If the exe was moved (e.g. after an update), point the Run entry at the new path.</summary>
     public static void FixPath()
     {
-        if (Enabled) Enabled = true;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            if (key?.GetValue(Name) is string cmd && cmd != Command) key.SetValue(Name, Command);
+        }
+        catch (Exception) { } // runs at every start: a refused write must not stop Vigil starting
     }
 }
 
 static class Theme
 {
     const string Personalize = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-
-    /// <summary>App windows: light or dark. Defaults to dark.</summary>
-    public static bool AppsLight => Read("AppsUseLightTheme");
 
     /// <summary>Taskbar: light or dark (decides the tray number's colour).</summary>
     public static bool TaskbarLight => Read("SystemUsesLightTheme");

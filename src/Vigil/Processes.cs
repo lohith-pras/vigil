@@ -15,6 +15,7 @@ record AppUsage(string Name, int Count, double Cpu, long Ram); // Cpu = share of
 sealed class ProcessSampler
 {
     readonly Dictionary<int, TimeSpan> _lastCpu = new();
+    HashSet<int> _denied = new(); // PIDs Windows won't let us time (system/service processes): don't retry and throw every sample
     long _lastStamp;
 
     public IReadOnlyList<AppUsage> Apps { get; private set; } = Array.Empty<AppUsage>();
@@ -24,7 +25,9 @@ sealed class ProcessSampler
     {
         long now = Stopwatch.GetTimestamp();
         double elapsed = _lastStamp == 0 ? 0 : (now - _lastStamp) / (double)Stopwatch.Frequency;
+        if (elapsed > 5) elapsed = 0; // stale baseline (panel was closed on this tab): start over, don't show a long average
         double capacity = elapsed * Environment.ProcessorCount;
+        var denied = new HashSet<int>();
 
         var cpu = new Dictionary<int, TimeSpan>();
         var groups = new Dictionary<string, (int count, double cpu, long ram)>(StringComparer.OrdinalIgnoreCase);
@@ -41,13 +44,18 @@ sealed class ProcessSampler
                 {
                     name = p.ProcessName;
                     ram = p.WorkingSet64;
-                    var t = p.TotalProcessorTime; // throws for protected/system processes: they count as 0 CPU
-                    cpu[p.Id] = t;
-                    if (capacity > 0 && _lastCpu.TryGetValue(p.Id, out var before))
-                        share = Math.Max(0, (t - before).TotalSeconds / capacity);
+                    if (_denied.Contains(p.Id)) denied.Add(p.Id);
+                    else
+                    {
+                        var t = p.TotalProcessorTime; // throws for protected/system processes: they count as 0 CPU
+                        cpu[p.Id] = t;
+                        if (capacity > 0 && _lastCpu.TryGetValue(p.Id, out var before))
+                            share = Math.Max(0, (t - before).TotalSeconds / capacity);
+                    }
                 }
                 catch (Exception e) when (e is Win32Exception or InvalidOperationException or NotSupportedException)
                 {
+                    denied.Add(p.Id);
                     try { name = p.ProcessName; } catch { continue; } // already exited
                 }
 
@@ -58,7 +66,8 @@ sealed class ProcessSampler
 
         _lastCpu.Clear();
         foreach (var (pid, t) in cpu) _lastCpu[pid] = t;
-        Measured = _lastStamp != 0;
+        _denied = denied; // rebuilt each sample, so a reused PID gets a fresh try
+        Measured = capacity > 0;
         _lastStamp = now;
         Apps = groups.Select(kv => new AppUsage(kv.Key, kv.Value.count, Math.Min(kv.Value.cpu, 1), kv.Value.ram)).ToList();
     }
@@ -66,6 +75,7 @@ sealed class ProcessSampler
     public void Reset()
     {
         _lastCpu.Clear();
+        _denied.Clear();
         _lastStamp = 0;
         Measured = false;
     }
@@ -81,8 +91,11 @@ sealed class ProcessSampler
         "services", "lsass", "svchost", "dwm", "fontdrvhost", "Secure System",
     };
 
+    // Process name = exe file name without extension. Cached: CanEnd runs for every row on every refresh.
+    static readonly string Self = System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath) ?? "Vigil";
+
     public static bool CanEnd(string name) =>
-        !Protected.Contains(name) && !name.Equals(Process.GetCurrentProcess().ProcessName, StringComparison.OrdinalIgnoreCase);
+        !Protected.Contains(name) && !name.Equals(Self, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Ends every process with this name. Returns an error message, or null if all ended.</summary>
     public static string? End(string name)
