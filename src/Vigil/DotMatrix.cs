@@ -43,6 +43,7 @@ sealed class DotMatrix : FrameworkElement
     double[] _values = Array.Empty<double>();
     Drawing? _static;               // every dot except the newest column's lit ones
     Rect[] _nowDots = Array.Empty<Rect>(); // newest column's lit dots, bottom first
+    Size _builtFor;                 // size the cached drawing was built for
     double _step;                   // one column + gap
     bool _settleNext = true;        // first Update after becoming visible shows the final state
 
@@ -83,16 +84,11 @@ sealed class DotMatrix : FrameworkElement
             ? a.AsSpan(1).SequenceEqual(b.AsSpan(0, b.Length - 1))
             : b.Length == a.Length + 1 && a.AsSpan().SequenceEqual(b.AsSpan(0, a.Length)));
 
-    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
-    {
-        base.OnRenderSizeChanged(sizeInfo);
-        Rebuild(sizeInfo.NewSize.Width, sizeInfo.NewSize.Height);
-    }
-
     void Rebuild(double w, double h)
     {
         _static = null;
         _nowDots = Array.Empty<Rect>();
+        _builtFor = new Size(w, h);
         int cols = Stats.HistoryLength;
         if (w <= 0 || h <= 0) return;
 
@@ -132,6 +128,9 @@ sealed class DotMatrix : FrameworkElement
 
     protected override void OnRender(DrawingContext dc)
     {
+        // WPF renders during arrange, before it reports the new size: build here when the size is new
+        // (first layout, DPI change), otherwise the first frame would be empty.
+        if (_builtFor != RenderSize) Rebuild(RenderSize.Width, RenderSize.Height);
         if (_static == null) return;
 
         double dx = Slide * _step;
