@@ -56,7 +56,7 @@ sealed class Tray : IDisposable
     readonly Dispatcher _ui = Dispatcher.CurrentDispatcher;
 
     PanelWindow? _panel;
-    DateTime _panelHiddenAt;
+    long _panelHiddenAt = long.MinValue / 2; // Environment.TickCount64, so a clock change can't block the tray click
     IntPtr _hicon;
     string _iconKey = "";
     int _tick;
@@ -116,8 +116,9 @@ sealed class Tray : IDisposable
         _timer.Start();
 
         // Background update check: 2 min after start, then every 6 h, only while the option is on.
+        // No BalloonTipClosed handler: the close event of a replaced notification can arrive after the
+        // next one is shown and would wipe its action. Every Notify overwrites the slot instead.
         _icon.BalloonTipClicked += (_, _) => _onBalloonClick?.Invoke();
-        _icon.BalloonTipClosed += (_, _) => _onBalloonClick = null;
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
         _updateTimer.Tick += async (_, _) =>
         {
@@ -128,9 +129,9 @@ sealed class Tray : IDisposable
     }
 
     readonly DispatcherTimer _updateTimer;
-    Action? _onBalloonClick; // what clicking the notification on screen does; null = nothing
+    Action? _onBalloonClick; // what clicking the latest notification does; null = nothing
 
-    /// <summary>One notification at a time: showing one also decides what clicking it does.</summary>
+    /// <summary>Showing a notification also decides what clicking it does.</summary>
     void Notify(string title, string text, Forms.ToolTipIcon icon, int ms, Action? onClick = null)
     {
         _onBalloonClick = onClick;
@@ -195,7 +196,7 @@ sealed class Tray : IDisposable
 
     void OnPanelHidden()
     {
-        _panelHiddenAt = DateTime.UtcNow;
+        _panelHiddenAt = Environment.TickCount64;
         // A few seconds after the panel closes, give its memory back to Windows (unless it reopened).
         _trim ??= new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
         {
@@ -219,20 +220,26 @@ sealed class Tray : IDisposable
         return _panel;
     }
 
-    internal void ShowPanelForTest() => Panel().ShowAt(new System.Drawing.Point(600, 500));
+    internal void ShowPanelForTest() => ShowPanel(new System.Drawing.Point(600, 500));
+
+    /// <summary>Read what only the panel shows (so it isn't sampled while closed), then open it.</summary>
+    void ShowPanel(System.Drawing.Point at)
+    {
+        _stats.RefreshDisks();
+        _stats.RefreshDevices();
+        _stats.RefreshHealth();
+        Panel().ShowAt(at);
+    }
 
     internal void HidePanelForTest() => _panel?.Hide();
 
     void TogglePanel()
     {
         // Clicking the tray icon first deactivates (and hides) an open panel; don't reopen it right away.
-        if ((DateTime.UtcNow - _panelHiddenAt).TotalMilliseconds < 300) return;
+        if (Environment.TickCount64 - _panelHiddenAt < 300) return;
         if (_panel?.IsVisible == true) { _panel.Hide(); return; }
 
-        _stats.RefreshDisks();
-        _stats.RefreshDevices();
-        _stats.RefreshHealth();
-        Panel().ShowAt(Forms.Cursor.Position);
+        ShowPanel(Forms.Cursor.Position);
     }
 
     void RenderIcon()
@@ -364,6 +371,7 @@ sealed class Tray : IDisposable
 
     void UpdateTooltip()
     {
+        if (_updating) return; // keep "checking for updates… / downloading…" on the icon until it's over
         var s = _stats;
         string text = $"CPU {s.Cpu * 100:0}% · RAM {Fmt.Gb(s.RamUsed)}/{s.RamTotal / 1073741824.0:0} GB · ↓ {Fmt.Rate(s.Down)} ↑ {Fmt.Rate(s.Up)}";
         if (s.Battery.Present) text += $" · 🔋 {s.Battery.Percent * 100:0}%";

@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Vigil;
@@ -75,10 +76,12 @@ static class Updater
         string exe = ExePath, fresh = exe + ".new", old = exe + ".old";
         TryDelete(fresh);
 
+        // HttpClient.Timeout stops at the response headers; without this a stalled download would never end.
+        using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10)))
         using (var http = NewClient())
-        await using (var src = await http.GetStreamAsync(r.AssetUrl))
+        await using (var src = await http.GetStreamAsync(r.AssetUrl, cts.Token))
         await using (var dst = File.Create(fresh))
-            await src.CopyToAsync(dst);
+            await src.CopyToAsync(dst, cts.Token);
 
         var info = new FileInfo(fresh);
         if (info.Length != r.Size)
@@ -119,6 +122,9 @@ static class Updater
         try { if (File.Exists(path)) File.Delete(path); } catch { /* still in use: next start */ }
     }
 
-    public static void OpenReleasesPage() =>
-        Process.Start(new ProcessStartInfo(ReleasesPage) { UseShellExecute = true });
+    public static void OpenReleasesPage()
+    {
+        try { Process.Start(new ProcessStartInfo(ReleasesPage) { UseShellExecute = true }); }
+        catch (Exception) { } // no default browser: nothing more to offer
+    }
 }

@@ -79,7 +79,9 @@ public partial class PanelWindow : Window
     /// <summary>Show next to the tray icon. cursor = click position in physical pixels.</summary>
     public void ShowAt(System.Drawing.Point cursor)
     {
-        ApplyTheme();
+        // The "Until…" row belongs to one opening: a time suggested hours ago would now mean tomorrow.
+        UntilRow.Visibility = Visibility.Collapsed;
+        UntilError.Text = "";
         Refresh();
         Show();
         Activate();
@@ -199,21 +201,22 @@ public partial class PanelWindow : Window
     // ---------- processes ----------
 
     internal readonly ProcessSampler _procs = new();
-    DateTime _procsAt = DateTime.MinValue;
+    const long Never = long.MinValue / 2;
+    long _procsAt = Never; // Environment.TickCount64 (ms): unaffected by clock changes
     bool _byRam;
-    (string Name, DateTime At)? _armed; // End clicked once on this app; a second click within 3 s ends it
+    (string Name, long At)? _armed; // End clicked once on this app; a second click within 3 s ends it
 
     void RefreshProcesses(bool force = false)
     {
         // Sample every 2 s, only while this tab is showing (see ProcessSampler).
         bool changed = force;
-        if ((DateTime.UtcNow - _procsAt).TotalSeconds >= 2)
+        if (Environment.TickCount64 - _procsAt >= 2000)
         {
-            _procsAt = DateTime.UtcNow;
+            _procsAt = Environment.TickCount64;
             _procs.Sample();
             changed = true;
         }
-        if (_armed is { } a && (DateTime.UtcNow - a.At).TotalSeconds > 3) { _armed = null; changed = true; }
+        if (_armed is { } a && Environment.TickCount64 - a.At > 3000) { _armed = null; changed = true; }
         // Rebuild rows only when something changed, so a click never lands on a button that was just replaced.
         if (!changed) return;
 
@@ -290,14 +293,14 @@ public partial class PanelWindow : Window
         if (_armed?.Name != name)
         {
             // Two-step: first click arms for 3 s, second click ends.
-            _armed = (name, DateTime.UtcNow);
+            _armed = (name, Environment.TickCount64);
             ProcStatus.Text = "";
         }
         else
         {
             _armed = null;
             ProcStatus.Text = ProcessSampler.End(name) ?? $"Ended {name}.";
-            _procsAt = DateTime.MinValue; // re-sample now
+            _procsAt = Never; // re-sample now
         }
         RefreshProcesses(force: true);
     }
@@ -518,7 +521,7 @@ public partial class PanelWindow : Window
         SystemPage.Visibility = tab == SystemTab ? Visibility.Visible : Visibility.Collapsed;
         NetPage.Visibility = tab == NetTab ? Visibility.Visible : Visibility.Collapsed;
         ProcPage.Visibility = tab == ProcTab ? Visibility.Visible : Visibility.Collapsed;
-        if (tab == ProcTab) { _procs.Reset(); _procsAt = DateTime.MinValue; RefreshProcesses(); }
+        if (tab == ProcTab) { _procs.Reset(); _procsAt = Never; RefreshProcesses(); }
         DiskPage.Visibility = tab == DiskTab ? Visibility.Visible : Visibility.Collapsed;
     }
 

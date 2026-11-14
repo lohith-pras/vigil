@@ -181,7 +181,8 @@ static class Displays
         try
         {
             using var q = new ManagementObjectSearcher(@"root\WMI", "SELECT CurrentBrightness FROM WmiMonitorBrightness WHERE Active=TRUE");
-            foreach (ManagementObject o in q.Get())
+            using var found = q.Get();
+            foreach (ManagementObject o in found)
                 using (o) return Convert.ToInt32(o["CurrentBrightness"]);
         }
         catch (Exception) { } // desktops / VMs: class not supported
@@ -191,7 +192,8 @@ static class Displays
     internal static void WmiSetBrightness(int level)
     {
         using var q = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM WmiMonitorBrightnessMethods WHERE Active=TRUE");
-        foreach (ManagementObject o in q.Get())
+        using var found = q.Get();
+        foreach (ManagementObject o in found)
             using (o)
             {
                 using var p = o.GetMethodParameters("WmiSetBrightness");
