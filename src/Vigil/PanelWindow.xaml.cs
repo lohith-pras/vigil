@@ -45,6 +45,7 @@ public partial class PanelWindow : Window
         SystemTab.IsChecked = true; // after InitializeComponent: Tab_Checked needs the pages to exist
 
         TabGrid.SizeChanged += (_, _) => MoveTabDot(animate: false);
+        IsVisibleChanged += (_, _) => SetAmbient();
         SourceInitialized += (_, _) => SetupWindow();
         Closing += (_, _) => _closing = true;
         // Click anywhere outside closes the panel. Not while closing: Hide() on a closing window throws.
@@ -91,43 +92,228 @@ public partial class PanelWindow : Window
 
     // ---------- motion ----------
 
-    static readonly KeySpline EaseOut = new(0.23, 1, 0.32, 1);   // entering
-    static readonly KeySpline EaseInOut = new(0.77, 0, 0.175, 1); // moving on screen
+    static readonly KeySpline InOut = Freeze(new KeySpline(0.42, 0, 0.58, 1)); // CSS ease-in-out: blinks and loops
+    static readonly IEasingFunction InOutEase = Freeze(new SineEase { EasingMode = EasingMode.EaseInOut });
 
-    // "Show animations in Windows" off = reduced motion: fades only, nothing slides.
-    static bool Motion => SystemParameters.ClientAreaAnimation;
+    static T Freeze<T>(T f) where T : Freezable { f.Freeze(); return f; }
 
-    static DoubleAnimationUsingKeyFrames Spline(double to, double ms, KeySpline curve)
-    {
-        var a = new DoubleAnimationUsingKeyFrames();
-        a.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms)), curve));
-        return a;
-    }
-
-    /// <summary>Open: 6 px rise + fade, 150 ms. Close stays instant (Hide).</summary>
+    /// <summary>Open: 5 px rise + fade, 400 ms; then the page's sections rise in. Close stays instant (Hide).</summary>
     void PlayOpen()
     {
         var shift = (TranslateTransform)Shell.RenderTransform;
-        Shell.Opacity = 0;
-        Shell.BeginAnimation(OpacityProperty, Spline(1, 150, EaseOut));
-        if (Motion)
+        Motion.FromTo(Shell, OpacityProperty, 0, 1, 400, fade: true);
+        Motion.FromTo(shift, TranslateTransform.YProperty, 5, 0, 400);
+        RevealSections(ActivePage());
+    }
+
+    FrameworkElement ActivePage() => _tabIndex switch
+    {
+        0 => AwakePage,
+        1 => DisplaysPage,
+        2 => SystemPage,
+        3 => ProcPage,
+        4 => NetPage,
+        _ => DiskPage,
+    };
+
+    /// <summary>The element's TranslateTransform, adding one when it has no transform; null when it has another kind.</summary>
+    static TranslateTransform? Shift(UIElement e)
+    {
+        if (e.RenderTransform is TranslateTransform t) return t;
+        if (e.RenderTransform is not null && e.RenderTransform != Transform.Identity) return null;
+        e.RenderTransform = t = new TranslateTransform();
+        return t;
+    }
+
+    /// <summary>Each visible direct child of the page rises 4 px and fades in, 700 ms, 70 ms apart.</summary>
+    static void RevealSections(FrameworkElement page)
+    {
+        var root = page is UserControl { Content: Panel inner } ? inner : page as Panel;
+        if (root is null) return;
+        int i = 0;
+        foreach (UIElement child in root.Children)
         {
-            shift.Y = 6;
-            shift.BeginAnimation(TranslateTransform.YProperty, Spline(0, 150, EaseOut));
+            if (child.Visibility != Visibility.Visible) continue;
+            double delay = 70 * i++;
+            Motion.FromTo(child, OpacityProperty, 0, 1, 700, delay, fade: true);
+            if (Shift(child) is { } t) Motion.FromTo(t, TranslateTransform.YProperty, 4, 0, 700, delay);
         }
+    }
+
+    /// <summary>A newly chosen page fades in and slides 5 px from the side it came from (500 ms), sections staggering.</summary>
+    static void ShowPage(FrameworkElement page, double fromX)
+    {
+        Motion.FromTo(page, OpacityProperty, 0, 1, 500, fade: true);
+        if (Shift(page) is { } t) Motion.FromTo(t, TranslateTransform.XProperty, fromX, 0, 500);
+        RevealSections(page);
     }
 
     int _tabIndex = 2;
 
-    /// <summary>The cobalt dot under the active tab; slides 180 ms between tabs.</summary>
+    /// <summary>The cobalt dot under the active tab; travels 550 ms, stretching to 2.4x wide halfway.</summary>
     void MoveTabDot(bool animate)
     {
         double w = TabGrid.ActualWidth;
         if (w <= 0) return;
         double x = w / 6 * _tabIndex + w / 12 - TabDot.Width / 2;
-        var t = (TranslateTransform)TabDot.RenderTransform;
-        if (animate && Motion && IsVisible) t.BeginAnimation(TranslateTransform.XProperty, Spline(x, 180, EaseInOut));
-        else { t.BeginAnimation(TranslateTransform.XProperty, null); t.X = x; }
+        if (animate && Motion.Enabled && IsVisible)
+        {
+            TabDotShift.BeginAnimation(TranslateTransform.XProperty, Motion.To(x, 550));
+            var stretch = new DoubleAnimationUsingKeyFrames();
+            stretch.KeyFrames.Add(new SplineDoubleKeyFrame(2.4, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(275)), Motion.Soft));
+            stretch.KeyFrames.Add(new SplineDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(550)), Motion.Soft));
+            TabDotScale.BeginAnimation(ScaleTransform.ScaleXProperty, stretch);
+        }
+        else
+        {
+            TabDotShift.BeginAnimation(TranslateTransform.XProperty, null);
+            TabDotShift.X = x;
+            TabDotScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        }
+    }
+
+    // Ambient loops: what is running now (0 / false / null = stopped). Only SetAmbient changes these.
+    double _blinkMs;
+    bool _pulsing, _colonPulsing;
+    AnimationClock? _downClock, _upClock;
+
+    /// <summary>The one place that decides which repeating animations run: only while the panel shows and motion is
+    /// on, and each only while its element is on screen. Starts or stops a loop only when its state changes.</summary>
+    void SetAmbient()
+    {
+        bool on = IsVisible && Motion.Enabled;
+
+        double blink = !on ? 0 : _awake.Holding ? 6000 : 10000;
+        if (blink != _blinkMs)
+        {
+            _blinkMs = blink;
+            EyeScale.BeginAnimation(ScaleTransform.ScaleYProperty, blink > 0 ? Blink(blink) : null);
+        }
+
+        bool pulse = on && HeaderDot.Visibility == Visibility.Visible;
+        if (pulse != _pulsing)
+        {
+            _pulsing = pulse;
+            HeaderPulseScale.BeginAnimation(ScaleTransform.ScaleXProperty, pulse ? Breathe(1, 2.6, 2000) : null);
+            HeaderPulseScale.BeginAnimation(ScaleTransform.ScaleYProperty, pulse ? Breathe(1, 2.6, 2000) : null);
+            HeaderPulse.BeginAnimation(OpacityProperty, pulse ? Breathe(0.28, 0, 2000) : null);
+        }
+
+        bool colon = on && _tabIndex == 0 && AwakeClock.Visibility == Visibility.Visible;
+        if (colon != _colonPulsing)
+        {
+            _colonPulsing = colon;
+            AwakeColon.BeginAnimation(OpacityProperty, colon ? Breathe(1, 0.45, 1000) : null);
+        }
+
+        bool net = on && _tabIndex == 4;
+        _downClock = Lane(DownLane, DownFlow, _downClock, net ? _stats.Down : 0, 4e6, +1);
+        _upClock = Lane(UpLane, UpFlow, _upClock, net ? _stats.Up : 0, 4e5, -1);
+    }
+
+    /// <summary>ScaleY 1 → .15 → 1 at the end of each period (CSS keyframes 93 % / 96.5 % / 100 %).</summary>
+    static DoubleAnimationUsingKeyFrames Blink(double periodMs)
+    {
+        var a = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(periodMs), RepeatBehavior = RepeatBehavior.Forever };
+        a.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.93)));
+        a.KeyFrames.Add(new SplineDoubleKeyFrame(0.15, KeyTime.FromPercent(0.965), InOut));
+        a.KeyFrames.Add(new SplineDoubleKeyFrame(1, KeyTime.FromPercent(1), InOut));
+        return a;
+    }
+
+    /// <summary>from → to → from forever, half a cycle each way, ease-in-out.</summary>
+    static DoubleAnimation Breathe(double rest, double peak, double halfMs) =>
+        new(rest, peak, TimeSpan.FromMilliseconds(halfMs)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, EasingFunction = InOutEase };
+
+    const double LanePitch = 26.0 / 3; // a dot travels 26 px (-4 → 22) per pass; three dots per pass
+
+    /// <summary>Traffic dots next to a rate: one linear loop that slides the dot column one pitch; its speed follows the
+    /// rate (pass 3.4 s idle → 1.8 s at max) through the clock's SpeedRatio, so it never restarts while running.</summary>
+    static AnimationClock? Lane(FrameworkElement lane, TranslateTransform flow, AnimationClock? clock, double rate, double max, int dir)
+    {
+        if (rate <= 0)
+        {
+            if (clock is not null)
+            {
+                clock.Controller?.Stop();
+                flow.ApplyAnimationClock(TranslateTransform.YProperty, null);
+            }
+            lane.Visibility = Visibility.Collapsed;
+            return null;
+        }
+        lane.Visibility = Visibility.Visible;
+        double speed = 3.4 / (3.4 - 1.6 * Math.Min(1, rate / max));
+        if (clock is null)
+        {
+            var loop = new DoubleAnimation(0, dir * LanePitch, TimeSpan.FromSeconds(3.4 / 3)) { RepeatBehavior = RepeatBehavior.Forever };
+            clock = loop.CreateClock();
+            flow.ApplyAnimationClock(TranslateTransform.YProperty, clock);
+        }
+        if (clock.Controller is { } c && Math.Abs(c.SpeedRatio - speed) > 0.05 * speed) c.SpeedRatio = speed;
+        return clock;
+    }
+
+    // Bars ease to new values (1.4 s); first value after showing is set directly so nothing sweeps from stale data.
+    readonly Dictionary<RangeBase, double> _barTo = new();
+
+    void SetBar(RangeBase bar, double to, bool linear = false)
+    {
+        if (bar.IsVisible && _barTo.TryGetValue(bar, out double was))
+        {
+            if (was == to || (!linear && Math.Abs(was - to) < 0.5)) return;
+            _barTo[bar] = to;
+            // AwakeBar drains every second: a 1 s linear step to the next value keeps it moving continuously.
+            if (linear && Motion.Enabled) bar.BeginAnimation(RangeBase.ValueProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(1)));
+            else Motion.Animate(bar, RangeBase.ValueProperty, to, 1400);
+            return;
+        }
+        _barTo[bar] = to;
+        bar.BeginAnimation(RangeBase.ValueProperty, null);
+        bar.Value = to;
+    }
+
+    // RamBar's own brush, so its colour can cross-fade to Warn (800 ms) instead of swapping frozen brushes.
+    SolidColorBrush? _ramBrush;
+    bool _ramHigh;
+
+    void SetRamColor(bool high)
+    {
+        var c = ((SolidColorBrush)Resources[high ? "Warn" : "Text"]).Color;
+        if (_ramBrush is null)
+        {
+            _ramBrush = new SolidColorBrush(c);
+            RamBar.Foreground = _ramBrush;
+        }
+        else if (high == _ramHigh) return;
+        else if (Motion.Fades && RamBar.IsVisible)
+        {
+            var a = new ColorAnimationUsingKeyFrames();
+            a.KeyFrames.Add(new SplineColorKeyFrame(c, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(800)), Motion.Soft));
+            _ramBrush.BeginAnimation(SolidColorBrush.ColorProperty, a);
+        }
+        else
+        {
+            _ramBrush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+            _ramBrush.Color = c;
+        }
+        _ramHigh = high;
+    }
+
+    /// <summary>A chip that just became selected: its white state is revealed as a circle growing from the click
+    /// point (keyboard: the centre), 750 ms. The style swap already happened; this only clips it in.</summary>
+    static void RevealChip(Button chip)
+    {
+        if (!Motion.Enabled || !chip.IsVisible) return;
+        double w = chip.ActualWidth, h = chip.ActualHeight;
+        var p = chip.IsMouseOver ? Mouse.GetPosition(chip) : new Point(w / 2, h / 2);
+        double dx = Math.Max(p.X, w - p.X), dy = Math.Max(p.Y, h - p.Y);
+        double r = Math.Sqrt(dx * dx + dy * dy);
+        var clip = new EllipseGeometry(p, 0, 0);
+        chip.Clip = clip;
+        var grow = Motion.To(r, 750);
+        grow.Completed += (_, _) => { if (chip.Clip == clip) chip.Clip = null; };
+        clip.BeginAnimation(EllipseGeometry.RadiusXProperty, grow);
+        clip.BeginAnimation(EllipseGeometry.RadiusYProperty, Motion.To(r, 750));
     }
 
     void Position(System.Drawing.Point cursor)
@@ -174,8 +360,8 @@ public partial class PanelWindow : Window
         bool high = s.RamFraction >= 0.8;
         RamText.Text = $"{s.RamFraction * 100:0}%";
         RamText.Foreground = (Brush)Resources[high ? "Warn" : "Text"];
-        RamBar.Value = s.RamFraction * 100;
-        RamBar.Foreground = (Brush)Resources[high ? "Warn" : "Text"];
+        SetBar(RamBar, s.RamFraction * 100);
+        SetRamColor(high);
         RamDetail.Text = $"{Fmt.Gb(s.RamUsed)} / {Fmt.Gb(s.RamTotal)} GB";
         RamLevel.Text = s.RamFraction >= 0.9 ? "very high" : high ? "high" : "";
         RamLevel.Foreground = (Brush)Resources["Warn"];
@@ -186,7 +372,7 @@ public partial class PanelWindow : Window
         SysBat.Text = s.Battery.Present ? $"{s.Battery.Percent * 100:0}%" : "—";
 
         // Header: what's holding the PC awake, else the two numbers people glance for.
-        HeaderDot.Visibility = _awake.Holding ? Visibility.Visible : Visibility.Collapsed;
+        HeaderDot.Visibility = HeaderPulse.Visibility = _awake.Holding ? Visibility.Visible : Visibility.Collapsed;
         HeaderStatus.Text = _awake.Holding
             ? "awake" + (_awake.Remaining is { } left ? $" · {Short(left)}" : "")
             : $"cpu {s.Cpu * 100:0}% · ram {s.RamFraction * 100:0}%";
@@ -196,6 +382,7 @@ public partial class PanelWindow : Window
         if (!ReferenceEquals(_shownDevices, s.Devices)) RebuildDevices(s.Devices);
         RefreshAwake();
         if (ProcTab.IsChecked == true && IsVisible) RefreshProcesses();
+        SetAmbient();
     }
 
     // ---------- processes ----------
@@ -309,7 +496,7 @@ public partial class PanelWindow : Window
 
     void RefreshBattery(BatteryInfo b)
     {
-        BatBar.Value = b.Present ? b.Percent * 100 : 0;
+        SetBar(BatBar, b.Present ? b.Percent * 100 : 0);
         BatPct.Text = b.Present ? $"{b.Percent * 100:0}%" : "—";
 
         (string text, string color) = !b.Present ? ("No battery", "Faint")
@@ -424,7 +611,19 @@ public partial class PanelWindow : Window
             : !a.Wanted ? "Off"
             : a.Remaining is { } left ? Clock(left)
             : "On";
-        AwakeBig.Foreground = (Brush)Resources[a.Holding ? "Text" : "SubText"];
+        var big = (Brush)Resources[a.Holding ? "Text" : "SubText"];
+        AwakeBig.Foreground = big;
+        // While counting down (and motion is on) the same reading shows as rolling digits with a breathing colon.
+        bool rolling = Motion.Enabled && a.PausedReason is null && a.Wanted && a.Remaining is not null;
+        AwakeBig.Visibility = rolling ? Visibility.Collapsed : Visibility.Visible;
+        AwakeClock.Visibility = rolling ? Visibility.Visible : Visibility.Collapsed;
+        if (rolling)
+        {
+            int colon = AwakeBig.Text.LastIndexOf(':');
+            TextElement.SetForeground(AwakeClock, big);
+            AwakeLead.Text = AwakeBig.Text[..colon];
+            AwakeSecs.Text = AwakeBig.Text[(colon + 1)..];
+        }
         AwakeStatus.Text =
             a.PausedReason is { } why ? why
             : !a.Wanted ? "PC follows its normal power settings"
@@ -436,8 +635,8 @@ public partial class PanelWindow : Window
         // Remaining time as a cobalt bar over hatch; only for timed sessions.
         if (a.Active && a.Remaining is { } rem && a.Duration is { } total && total > TimeSpan.Zero)
         {
+            SetBar(AwakeBar, Math.Clamp(rem / total * 100, 0, 100), linear: true); // before showing: first value lands directly
             AwakeBar.Visibility = Visibility.Visible;
-            AwakeBar.Value = Math.Clamp(rem / total * 100, 0, 100);
         }
         else AwakeBar.Visibility = Visibility.Collapsed;
 
@@ -514,6 +713,7 @@ public partial class PanelWindow : Window
     {
         if (DiskPage is null) return; // fires during InitializeComponent, before the pages exist
         var tab = (RadioButton)sender;
+        int prev = _tabIndex;
         _tabIndex = int.Parse((string)tab.Tag);
         MoveTabDot(animate: true);
         AwakePage.Visibility = tab == AwakeTab ? Visibility.Visible : Visibility.Collapsed;
@@ -523,6 +723,8 @@ public partial class PanelWindow : Window
         ProcPage.Visibility = tab == ProcTab ? Visibility.Visible : Visibility.Collapsed;
         if (tab == ProcTab) { _procs.Reset(); _procsAt = Never; RefreshProcesses(); }
         DiskPage.Visibility = tab == DiskTab ? Visibility.Visible : Visibility.Collapsed;
+        if (IsVisible && prev != _tabIndex) ShowPage(ActivePage(), _tabIndex > prev ? 5 : -5);
+        SetAmbient();
     }
 
     void Chip_Click(object sender, RoutedEventArgs e)
@@ -547,7 +749,11 @@ public partial class PanelWindow : Window
         }
         var duration = ChipDuration(button);
         if (_awake.Active && _awake.Duration == duration) _awake.Stop(); // same chip again = stop
-        else _awake.Start(duration);
+        else
+        {
+            _awake.Start(duration); // raises Changed → Refresh, which swaps this chip to ChipOn
+            RevealChip(button);
+        }
     }
 
     void AwakeSwitch_Click(object sender, RoutedEventArgs e)

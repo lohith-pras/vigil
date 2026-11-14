@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Animation;
 
 namespace Vigil;
 
@@ -30,6 +31,7 @@ public partial class SpeedTestView : UserControl
         Results.Visibility = Visibility.Visible;
         DownValue.Text = UpValue.Text = PingValue.Text = "—";
         Status.Text = "Measuring ping…";
+        StartScan();
 
         // Progress<T> posts back to this (UI) thread; the test itself runs on the thread pool.
         var progress = new Progress<(string Phase, double Value)>(p =>
@@ -54,11 +56,40 @@ public partial class SpeedTestView : UserControl
         }
         finally
         {
+            StopScan();
             _cts.Dispose();
             _cts = null;
             RunButton.Content = "Run speed test";
             RunButton.SetResourceReference(StyleProperty, "Chip");
         }
+    }
+
+    void StartScan()
+    {
+        if (!Motion.Enabled) return;
+        Results.UpdateLayout();
+        double h = ResultsHost.ActualHeight;
+        if (h <= 0) return;
+        var ms = (double t) => KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(2600 * t));
+        var y = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        y.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, ms(0)));
+        y.KeyFrames.Add(new SplineDoubleKeyFrame(h - 1, ms(1), Motion.Soft));
+        var o = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        o.KeyFrames.Add(new LinearDoubleKeyFrame(0, ms(0)));
+        o.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, ms(0.15)));
+        o.KeyFrames.Add(new LinearDoubleKeyFrame(0.7, ms(0.85)));
+        o.KeyFrames.Add(new LinearDoubleKeyFrame(0, ms(1)));
+        ScanLine.Visibility = Visibility.Visible;
+        ScanShift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, y);
+        ScanLine.BeginAnimation(OpacityProperty, o);
+    }
+
+    void StopScan()
+    {
+        ScanShift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, null);
+        ScanLine.BeginAnimation(OpacityProperty, null);
+        ScanLine.Opacity = 0;
+        ScanLine.Visibility = Visibility.Collapsed;
     }
 
     internal void ShowResult(SpeedTest.Result r)

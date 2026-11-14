@@ -10,7 +10,8 @@
     <!--
       Design (docs/DESIGN.md): zinc-black acrylic in a double bezel; Geist for words, Geist Mono for every
       measurement; one cobalt dot marks "now" / "here" / "on"; hatch fills mark headroom; hairlines, no cards.
-      Motion: press scale .97 / 140 ms, tab dot 180 ms in-out, open 150 ms rise + fade, close instant.
+      Motion (one curve, Motion.Soft): open 400 ms 5 px rise + fade, sections stagger 70 ms; tab dot 550 ms with a
+      stretch; press scale .97 / 140 ms; switch 200 / 180 ms; close instant. Ambient loops only while the panel shows.
     -->
 
     <Window.Resources>
@@ -34,6 +35,14 @@
                 </GeometryDrawing>
             </DrawingBrush.Drawing>
         </DrawingBrush>
+
+        <!-- Traffic lanes: dots fade in over the first 30 % of the pass and out over the last 30 %. -->
+        <LinearGradientBrush x:Key="LaneMask" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Offset="0" Color="#00000000" />
+            <GradientStop Offset="0.264" Color="#CC000000" />
+            <GradientStop Offset="0.736" Color="#CC000000" />
+            <GradientStop Offset="1" Color="#00000000" />
+        </LinearGradientBrush>
 
         <!-- Press feedback shared by every pressable template: scale .97, strong ease-out. -->
         <Storyboard x:Key="PressIn">
@@ -355,12 +364,21 @@
                         <Grid>
                             <TextBlock Text="ı" />
                             <Ellipse Width="4.5" Height="4.5" Fill="{DynamicResource Accent}" HorizontalAlignment="Center"
-                                     VerticalAlignment="Top" Margin="0.5,4,0,0" />
+                                     VerticalAlignment="Top" Margin="0.5,4,0,0" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform x:Name="EyeScale" /></Ellipse.RenderTransform>
+                            </Ellipse>
                         </Grid>
                         <TextBlock Text="gil" Margin="-0.5,0,0,0" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <Ellipse x:Name="HeaderDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" Visibility="Collapsed" />
+                        <!-- Awake dot; the pulse ring behind it shows and hides with it (Refresh). -->
+                        <Grid>
+                            <Ellipse x:Name="HeaderPulse" Width="6" Height="6" Fill="{DynamicResource Good}" Opacity="0" Margin="0,1,6,0"
+                                     RenderTransformOrigin="0.5,0.5" Visibility="Collapsed" IsHitTestVisible="False">
+                                <Ellipse.RenderTransform><ScaleTransform x:Name="HeaderPulseScale" /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="HeaderDot" Width="6" Height="6" Fill="{DynamicResource Good}" Margin="0,1,6,0" Visibility="Collapsed" />
+                        </Grid>
                         <TextBlock x:Name="HeaderStatus" Style="{StaticResource Axis}" Foreground="{DynamicResource SubText}" />
                     </StackPanel>
                 </Grid>
@@ -387,8 +405,13 @@
                                      ToolTip="Disks" AutomationProperties.Name="Disks" Checked="Tab_Checked" />
                     </UniformGrid>
                     <Canvas Grid.Row="1" ClipToBounds="False">
-                        <Grid x:Name="TabDot" Width="10" Height="10" Canvas.Top="0">
-                            <Grid.RenderTransform><TranslateTransform /></Grid.RenderTransform>
+                        <Grid x:Name="TabDot" Width="10" Height="10" Canvas.Top="0" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="TabDotScale" />
+                                    <TranslateTransform x:Name="TabDotShift" />
+                                </TransformGroup>
+                            </Grid.RenderTransform>
                             <Ellipse Fill="{DynamicResource Accent}" Opacity="0.18" />
                             <Ellipse Width="4" Height="4" Fill="{DynamicResource Accent}" />
                         </Grid>
@@ -410,6 +433,14 @@
                             <WrapPanel Margin="0,14,0,0">
                                 <TextBlock x:Name="AwakeBig" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="40"
                                            Margin="0,0,10,0" VerticalAlignment="Bottom" />
+                                <!-- Same reading while a countdown runs (motion on): rolling digits, breathing colon. -->
+                                <StackPanel x:Name="AwakeClock" Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Bottom"
+                                            Visibility="Collapsed" TextElement.FontFamily="{StaticResource MonoMedium}"
+                                            TextElement.FontWeight="Medium" TextElement.FontSize="40">
+                                    <local:RollingText x:Name="AwakeLead" />
+                                    <TextBlock x:Name="AwakeColon" Text=":" />
+                                    <local:RollingText x:Name="AwakeSecs" />
+                                </StackPanel>
                                 <TextBlock x:Name="AwakeStatus" Foreground="{DynamicResource SubText}" TextWrapping="Wrap"
                                            VerticalAlignment="Bottom" Margin="0,0,0,7" />
                             </WrapPanel>
@@ -491,7 +522,7 @@
                             <TextBlock Style="{StaticResource Heading}" Text="System" Margin="0,0,0,16" />
                             <Grid>
                                 <TextBlock Style="{StaticResource Title}" Text="Processor" />
-                                <TextBlock x:Name="CpuText" Style="{StaticResource Reading}" HorizontalAlignment="Right" />
+                                <local:RollingText x:Name="CpuText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="22" HorizontalAlignment="Right" />
                             </Grid>
                             <local:DotMatrix x:Name="CpuGraph" Height="34" Margin="0,12,0,0"
                                              AutomationProperties.Name="CPU load over the last minute" />
@@ -505,7 +536,7 @@
 
                             <Grid>
                                 <TextBlock Style="{StaticResource Title}" Text="Memory" />
-                                <TextBlock x:Name="RamText" Style="{StaticResource Reading}" HorizontalAlignment="Right" />
+                                <local:RollingText x:Name="RamText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="22" HorizontalAlignment="Right" />
                             </Grid>
                             <ProgressBar x:Name="RamBar" Style="{StaticResource Bar}" Height="8" Margin="0,12,0,0" />
                             <Grid Margin="0,8,0,0">
@@ -518,11 +549,11 @@
                             <UniformGrid Columns="2">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Muted}" Text="Download" />
-                                    <TextBlock x:Name="SysDown" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" />
+                                    <local:RollingText x:Name="SysDown" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" HorizontalAlignment="Left" />
                                 </StackPanel>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Muted}" Text="Battery" />
-                                    <TextBlock x:Name="SysBat" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" />
+                                    <local:RollingText x:Name="SysBat" FontFamily="{StaticResource Mono}" FontSize="15" Margin="0,4,0,0" HorizontalAlignment="Left" />
                                 </StackPanel>
                             </UniformGrid>
                         </StackPanel>
@@ -562,11 +593,37 @@
                             <UniformGrid Columns="2">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Muted}" Text="Download" />
-                                    <TextBlock x:Name="DownText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" Margin="0,4,0,0" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <!-- Traffic lane: 10x22, clipped; the dot column slides one pitch per loop. -->
+                                        <Border x:Name="DownLane" Width="10" Height="22" Margin="0,-6,8,-6" VerticalAlignment="Center"
+                                                ClipToBounds="True" OpacityMask="{StaticResource LaneMask}" Visibility="Collapsed">
+                                            <Canvas>
+                                                <Canvas.RenderTransform><TranslateTransform x:Name="DownFlow" /></Canvas.RenderTransform>
+                                                <Ellipse Canvas.Left="3" Canvas.Top="-12.667" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="-4" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="4.667" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="13.333" Width="4" Height="4" Fill="#A1A1AA" />
+                                            </Canvas>
+                                        </Border>
+                                        <local:RollingText x:Name="DownText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource Muted}" Text="Upload" />
-                                    <TextBlock x:Name="UpText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" Margin="0,4,0,0" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <!-- Traffic lane: 10x22, clipped; the dot column slides one pitch per loop. -->
+                                        <Border x:Name="UpLane" Width="10" Height="22" Margin="0,-6,8,-6" VerticalAlignment="Center"
+                                                ClipToBounds="True" OpacityMask="{StaticResource LaneMask}" Visibility="Collapsed">
+                                            <Canvas>
+                                                <Canvas.RenderTransform><TranslateTransform x:Name="UpFlow" /></Canvas.RenderTransform>
+                                                <Ellipse Canvas.Left="3" Canvas.Top="-4" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="4.667" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="13.333" Width="4" Height="4" Fill="#A1A1AA" />
+                                                <Ellipse Canvas.Left="3" Canvas.Top="22" Width="4" Height="4" Fill="#A1A1AA" />
+                                            </Canvas>
+                                        </Border>
+                                        <local:RollingText x:Name="UpText" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
                             </UniformGrid>
                             <local:SpeedTestView x:Name="SpeedTestBlock" Margin="0,14,0,0" />
@@ -580,8 +637,8 @@
                             </Grid>
                             <Grid>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="BatPct" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20"
-                                               VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <local:RollingText x:Name="BatPct" FontFamily="{StaticResource MonoMedium}" FontWeight="Medium" FontSize="20"
+                                                       VerticalAlignment="Center" Margin="0,0,10,0" />
                                     <Border x:Name="BatPill" CornerRadius="10" Padding="8,2,10,3" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <Ellipse x:Name="BatDot" Width="6" Height="6" VerticalAlignment="Center" Margin="0,1,6,0" />
