@@ -1,7 +1,8 @@
 <!-- "Run speed test" block for the Network section. Uses the panel's styles and brushes. -->
 <UserControl x:Class="Vigil.SpeedTestView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Vigil">
     <StackPanel>
         <Grid>
             <Grid.ColumnDefinitions>
@@ -13,19 +14,34 @@
             <TextBlock x:Name="Status" Grid.Column="1" Style="{DynamicResource Muted}" VerticalAlignment="Center"
                        TextWrapping="Wrap" />
         </Grid>
-        <UniformGrid x:Name="Results" Columns="3" Margin="0,10,0,0" Visibility="Collapsed">
+        <Grid x:Name="ResultsHost" Margin="0,10,0,0" ClipToBounds="True">
+        <UniformGrid x:Name="Results" Columns="3" Visibility="Collapsed">
             <StackPanel>
-                <TextBlock x:Name="DownValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <local:RollingText x:Name="DownValue" FontFamily="{DynamicResource MonoMedium}" FontWeight="Medium" FontSize="18" Text="—" />
                 <TextBlock Style="{DynamicResource Axis}" Text="↓ Mbps" />
             </StackPanel>
             <StackPanel>
-                <TextBlock x:Name="UpValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <local:RollingText x:Name="UpValue" FontFamily="{DynamicResource MonoMedium}" FontWeight="Medium" FontSize="18" Text="—" />
                 <TextBlock Style="{DynamicResource Axis}" Text="↑ Mbps" />
             </StackPanel>
             <StackPanel>
-                <TextBlock x:Name="PingValue" Style="{DynamicResource Reading}" FontSize="18" Text="—" />
+                <local:RollingText x:Name="PingValue" FontFamily="{DynamicResource MonoMedium}" FontWeight="Medium" FontSize="18" Text="—" />
                 <TextBlock Style="{DynamicResource Axis}" Text="ping ms" />
             </StackPanel>
         </UniformGrid>
+        <!-- Scan line: only animated while a test runs; overlay, no layout effect. -->
+        <Border x:Name="ScanLine" Height="1" VerticalAlignment="Top" IsHitTestVisible="False" Opacity="0" Visibility="Collapsed">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#004C7DFF" Offset="0" />
+                    <GradientStop Color="#4C7DFF" Offset="0.5" />
+                    <GradientStop Color="#004C7DFF" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="ScanShift" />
+            </Border.RenderTransform>
+        </Border>
+        </Grid>
     </StackPanel>
 </UserControl>

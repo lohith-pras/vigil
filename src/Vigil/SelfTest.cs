@@ -25,6 +25,7 @@ static class SelfTest
 
     public static int Run(string dir)
     {
+        Motion.Off = true; // every screenshot and check sees final states
         Directory.CreateDirectory(dir);
         try
         {
