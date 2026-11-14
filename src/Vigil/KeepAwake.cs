@@ -18,11 +18,13 @@ namespace Vigil;
 /// </summary>
 sealed class KeepAwake
 {
-    // ---- manual session ----
-    public bool Active { get; private set; }
-    public TimeSpan? Duration { get; private set; }   // chip that started it; null = indefinite
-    public DateTime? UntilTime { get; private set; }  // set when started with "Until…" (local time)
-    DateTime _untilUtc;
+    // ---- manual session: null = off. One value, so "on", "how long" and "until when" can't disagree. ----
+    sealed record Session(TimeSpan? Duration, DateTime? UntilTime, DateTime EndsUtc);
+    Session? _session;
+
+    public bool Active => _session is not null;
+    public TimeSpan? Duration => _session?.Duration;    // chip that started it; null = indefinite
+    public DateTime? UntilTime => _session?.UntilTime;  // set when started with "Until…" (local time)
 
     // ---- options (saved in settings.json) ----
     bool _displayOn, _onlyPlugged, _pauseLocked;
@@ -46,17 +48,14 @@ sealed class KeepAwake
         : null;
     public bool Holding => Wanted && PausedReason is null;
 
-    public TimeSpan? Remaining => Active && Duration is not null ? _untilUtc - DateTime.UtcNow : null;
+    public TimeSpan? Remaining => _session is { Duration: not null } s ? s.EndsUtc - DateTime.UtcNow : null;
 
     public event Action? Changed;
     uint _applied; // last flags sent to Windows (0 = never)
 
     public void Start(TimeSpan? duration)
     {
-        Active = true;
-        Duration = duration;
-        UntilTime = null;
-        if (duration is { } d) _untilUtc = DateTime.UtcNow + d;
+        _session = new(duration, null, duration is { } d ? DateTime.UtcNow + d : default);
         Update();
     }
 
@@ -65,30 +64,20 @@ sealed class KeepAwake
     {
         var until = DateTime.Today + timeOfDay;
         if (until <= DateTime.Now) until = until.AddDays(1);
-        Active = true;
-        UntilTime = until;
-        Duration = until - DateTime.Now;
-        _untilUtc = until.ToUniversalTime();
+        _session = new(until - DateTime.Now, until, until.ToUniversalTime());
         Update();
     }
 
     public void Stop()
     {
-        Active = false;
-        Duration = null;
-        UntilTime = null;
+        _session = null;
         Update();
     }
 
     /// <summary>Called every second. Ends timed sessions, tracks power and watched apps.</summary>
     public void Tick(bool pluggedIn, bool checkApps)
     {
-        if (Remaining is { } r && r <= TimeSpan.Zero)
-        {
-            Active = false;
-            Duration = null;
-            UntilTime = null;
-        }
+        if (Remaining <= TimeSpan.Zero) _session = null;
         OnBattery = !pluggedIn;
         if (checkApps) RunningApp = FindRunningApp();
         Update();

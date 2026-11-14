@@ -48,8 +48,8 @@ sealed class Stats
         SampleRam();
         SampleNetwork();
         SampleBattery();
-        if (_tick % 30 == 0) SampleDisks(); // disk space barely moves; spec allows 30 s
-        if (_tick % 60 == 0) RefreshDevices();
+        if (_tick % 30 == 0) SampleDisks(); // disk space barely moves; spec allows 30 s (also feeds the drive-full alert)
+        // Bluetooth devices: only the panel shows them, so Tray refreshes them while it's open, not here.
         _tick++;
     }
 

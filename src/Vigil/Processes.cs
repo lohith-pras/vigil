@@ -81,8 +81,11 @@ sealed class ProcessSampler
         "services", "lsass", "svchost", "dwm", "fontdrvhost", "Secure System",
     };
 
+    // Process name = exe file name without extension. Cached: CanEnd runs for every row on every refresh.
+    static readonly string Self = System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath) ?? "Vigil";
+
     public static bool CanEnd(string name) =>
-        !Protected.Contains(name) && !name.Equals(Process.GetCurrentProcess().ProcessName, StringComparison.OrdinalIgnoreCase);
+        !Protected.Contains(name) && !name.Equals(Self, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Ends every process with this name. Returns an error message, or null if all ended.</summary>
     public static string? End(string name)

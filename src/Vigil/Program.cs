@@ -116,8 +116,8 @@ sealed class Tray : IDisposable
         _timer.Start();
 
         // Background update check: 2 min after start, then every 6 h, only while the option is on.
-        _icon.BalloonTipClicked += (_, _) => { if (_balloonIsUpdate) CheckForUpdates(); };
-        _icon.BalloonTipClosed += (_, _) => _balloonIsUpdate = false;
+        _icon.BalloonTipClicked += (_, _) => _onBalloonClick?.Invoke();
+        _icon.BalloonTipClosed += (_, _) => _onBalloonClick = null;
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(2) };
         _updateTimer.Tick += async (_, _) =>
         {
@@ -128,7 +128,14 @@ sealed class Tray : IDisposable
     }
 
     readonly DispatcherTimer _updateTimer;
-    bool _balloonIsUpdate;
+    Action? _onBalloonClick; // what clicking the notification on screen does; null = nothing
+
+    /// <summary>One notification at a time: showing one also decides what clicking it does.</summary>
+    void Notify(string title, string text, Forms.ToolTipIcon icon, int ms, Action? onClick = null)
+    {
+        _onBalloonClick = onClick;
+        _icon.ShowBalloonTip(ms, title, text, icon); // Windows 10/11 shows it as a toast
+    }
 
     /// <summary>Quiet check: a notification only when a newer release exists and hasn't been announced yet.</summary>
     async System.Threading.Tasks.Task BackgroundUpdateCheck()
@@ -142,9 +149,8 @@ sealed class Tray : IDisposable
             if (_settings.AnnouncedVersion == v) return;
             _settings.AnnouncedVersion = v;
             _settings.Save();
-            _balloonIsUpdate = true;
-            _icon.ShowBalloonTip(15_000, $"Vigil {v} is available",
-                $"You have {Updater.Current}. Click to update; Vigil restarts by itself.", Forms.ToolTipIcon.Info);
+            Notify($"Vigil {v} is available", $"You have {Updater.Current}. Click to update; Vigil restarts by itself.",
+                   Forms.ToolTipIcon.Info, 15_000, CheckForUpdates);
         }
         catch (Exception) { } // offline or rate-limited: try again next round, never bother the user
     }
@@ -163,16 +169,19 @@ sealed class Tray : IDisposable
         // ponytail: battery state from the 1 s sample; app list re-checked every 5 s.
         _awake.Tick(pluggedIn: _stats.Battery.PluggedIn || !_stats.Battery.Present, checkApps: _tick % 5 == 0);
         foreach (var (title, text) in _alerts.Check(_stats.Battery, _stats.Disks, _stats.Cpu, _stats.RamFraction))
-        {
-            _balloonIsUpdate = false; // clicking an alert must not start an update
-            _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.Warning); // Windows 10/11 shows it as a toast
-        }
-        if (_tick++ % 2 == 0)
+            Notify(title, text, Forms.ToolTipIcon.Warning, 10_000);
+        if (_tick % 2 == 0)
         {
             RenderIcon();
             UpdateTooltip();
         }
-        if (_panel?.IsVisible == true) _panel.Refresh();
+        if (_panel?.IsVisible == true)
+        {
+            // Only the panel shows Bluetooth batteries (a walk over every device): read on open, then each minute while open.
+            if (_tick % 60 == 0) _stats.RefreshDevices();
+            _panel.Refresh();
+        }
+        _tick++;
     }
 
     void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
@@ -200,15 +209,17 @@ sealed class Tray : IDisposable
         _trim.Start();
     }
 
-    internal void ShowPanelForTest()
+    PanelWindow Panel()
     {
         if (_panel is null)
         {
             _panel = new PanelWindow(_stats, _awake, _quit, this);
             _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
         }
-        _panel.ShowAt(new System.Drawing.Point(600, 500));
+        return _panel;
     }
+
+    internal void ShowPanelForTest() => Panel().ShowAt(new System.Drawing.Point(600, 500));
 
     internal void HidePanelForTest() => _panel?.Hide();
 
@@ -218,15 +229,10 @@ sealed class Tray : IDisposable
         if ((DateTime.UtcNow - _panelHiddenAt).TotalMilliseconds < 300) return;
         if (_panel?.IsVisible == true) { _panel.Hide(); return; }
 
-        if (_panel is null)
-        {
-            _panel = new PanelWindow(_stats, _awake, _quit, this);
-            _panel.IsVisibleChanged += (_, e) => { if (!(bool)e.NewValue) OnPanelHidden(); };
-        }
         _stats.RefreshDisks();
         _stats.RefreshDevices();
         _stats.RefreshHealth();
-        _panel.ShowAt(Forms.Cursor.Position);
+        Panel().ShowAt(Forms.Cursor.Position);
     }
 
     void RenderIcon()

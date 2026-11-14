@@ -201,8 +201,7 @@ public partial class PanelWindow : Window
     internal readonly ProcessSampler _procs = new();
     DateTime _procsAt = DateTime.MinValue;
     bool _byRam;
-    string? _armed;         // app whose End button was clicked once
-    DateTime _armedAt;
+    (string Name, DateTime At)? _armed; // End clicked once on this app; a second click within 3 s ends it
 
     void RefreshProcesses(bool force = false)
     {
@@ -214,7 +213,7 @@ public partial class PanelWindow : Window
             _procs.Sample();
             changed = true;
         }
-        if (_armed is not null && (DateTime.UtcNow - _armedAt).TotalSeconds > 3) { _armed = null; changed = true; }
+        if (_armed is { } a && (DateTime.UtcNow - a.At).TotalSeconds > 3) { _armed = null; changed = true; }
         // Rebuild rows only when something changed, so a click never lands on a button that was just replaced.
         if (!changed) return;
 
@@ -260,7 +259,7 @@ public partial class PanelWindow : Window
 
             if (ProcessSampler.CanEnd(app.Name))
             {
-                bool armed = _armed == app.Name;
+                bool armed = _armed?.Name == app.Name;
                 var end = new Button
                 {
                     Style = (Style)FindResource(armed ? "MiniDanger" : "Mini"),
@@ -288,11 +287,10 @@ public partial class PanelWindow : Window
     void EndTask_Click(object sender, RoutedEventArgs e)
     {
         string name = (string)((Button)sender).Tag;
-        if (_armed != name)
+        if (_armed?.Name != name)
         {
             // Two-step: first click arms for 3 s, second click ends.
-            _armed = name;
-            _armedAt = DateTime.UtcNow;
+            _armed = (name, DateTime.UtcNow);
             ProcStatus.Text = "";
         }
         else
@@ -303,6 +301,8 @@ public partial class PanelWindow : Window
         }
         RefreshProcesses(force: true);
     }
+
+    string? _pillColor;
 
     void RefreshBattery(BatteryInfo b)
     {
@@ -315,10 +315,14 @@ public partial class PanelWindow : Window
             : b.Percent < 0.2 ? ("On battery", "Danger")
             : ("On battery", "Warn");
         BatState.Text = text;
-        var brush = (SolidColorBrush)Resources[color];
-        BatDot.Fill = brush;
-        BatPill.Background = new SolidColorBrush(Color.FromArgb(0x24, brush.Color.R, brush.Color.G, brush.Color.B));
-        BatState.Foreground = brush;
+        if (color != _pillColor) // runs every second: only touch brushes when the state actually changes
+        {
+            _pillColor = color;
+            var brush = (SolidColorBrush)Resources[color];
+            BatDot.Fill = brush;
+            BatPill.Background = new SolidColorBrush(Color.FromArgb(0x24, brush.Color.R, brush.Color.G, brush.Color.B));
+            BatState.Foreground = brush;
+        }
 
         BatTime.Text = b.Present && !b.PluggedIn && b.SecondsLeft > 0
             ? $"{Fmt.Duration(TimeSpan.FromSeconds(b.SecondsLeft))} left"
