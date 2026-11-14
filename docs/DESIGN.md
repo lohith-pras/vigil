@@ -56,12 +56,25 @@ Selected chips are inverted (white fill, black text), not cobalt.
 
 ## Motion
 
+Slow and quiet: one curve for everything, `(.45, .05, .25, 1)` (`Motion.Soft`). Nothing overshoots, nothing travels more than a few px, and nothing moves unless a value changed. All of it runs only while the panel is visible. Code: `Motion.cs`, `RollingText.cs`.
+
 | What | How |
 |---|---|
-| Panel open | 6 px rise + fade, 150 ms, `(.23, 1, .32, 1)` |
+| Panel open | 5 px rise + fade, 400 ms; sections of the page rise 4 px + fade, 700 ms, 70 ms apart |
 | Panel close | instant |
-| Tab dot | slides 180 ms, `(.77, 0, .175, 1)`; page content swaps instantly |
+| Tab change | dot travels 550 ms and stretches to 2.4x mid-way; page fades in, 5 px from the side it came from, 500 ms |
+| Wordmark eye | the cobalt dot blinks every 10 s (every 6 s while keep-awake holds) |
+| Awake dot (header) | soft pulse every 4 s |
+| Readings | only the digits that changed slide up into place, 500 ms |
+| Countdown | rolling digits; the colon eases to 45 % and back every 2 s |
+| Dot field | slides one column per sample, 950 ms; the new column lights bottom-up, 600 ms per dot, 55 ms apart |
+| Bars | ease to the new value over 1.4 s; memory turns amber over 800 ms |
+| Chip selected | white fill spreads from the click point, 750 ms |
+| Traffic | dots fall (download) / climb (upload); 3.4 s per pass down to 1.8 s at high rates; hidden when idle |
+| Speed test | cobalt hairline sweeps the results while running, 2.6 s per pass |
+| Process rows | glide to their new rank, 800 ms; an ended app fades out 6 px left, 500 ms |
+| End armed | fades to red over 450 ms; a line drains along the bottom for the 3 s it stays armed |
 | Press (every button, chip, tab) | scale .97, 140 ms ease-out |
 | Switch | knob 200 ms in-out, track colour 180 ms |
-| Readings | update without animation |
-| "Show animations in Windows" off | fades only, nothing slides |
+| "Show animations in Windows" off | fades only, nothing slides or loops |
+| Self-test (`Motion.Off`) | nothing animates, so screenshots are settled |

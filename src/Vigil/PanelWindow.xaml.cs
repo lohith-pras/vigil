@@ -390,82 +390,226 @@ public partial class PanelWindow : Window
     internal readonly ProcessSampler _procs = new();
     const long Never = long.MinValue / 2;
     long _procsAt = Never; // Environment.TickCount64 (ms): unaffected by clock changes
+    long _procsDrawnAt = Never; // last RefreshProcesses call; a gap means the list wasn't on screen
     bool _byRam;
     (string Name, long At)? _armed; // End clicked once on this app; a second click within 3 s ends it
+    // Rows by app name, reused while the app stays in the top 8: a row keeps its place in a glide and its End state,
+    // and a click never lands on a button that was just replaced.
+    readonly Dictionary<string, ProcRow> _rows = new();
+    ProcRow? _leaving; // an ended app sliding out; the list holds still until it's gone
+
+    sealed class ProcRow(string name, Grid root, TranslateTransform shift, Run count, TextBlock cpu, TextBlock ram,
+                         Button? end, SolidColorBrush fill, SolidColorBrush ring, SolidColorBrush ink, Border drain)
+    {
+        public readonly string Name = name;
+        public readonly Grid Root = root;
+        public readonly TranslateTransform Shift = shift;
+        public readonly Run Count = count;
+        public readonly TextBlock Cpu = cpu, Ram = ram;
+        public readonly Button? End = end; // null for apps that can't be ended
+        public readonly SolidColorBrush Fill = fill, Ring = ring, Ink = ink; // End's own brushes, so armed can cross-fade
+        public readonly Border Drain = drain; // 2 px line along End's bottom edge: the 3 s it stays armed
+        public bool Armed;
+    }
+
+    static readonly Color RestRing = Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF); // the Mini style's outline
 
     void RefreshProcesses(bool force = false)
     {
+        long now = Environment.TickCount64;
+        // Tab just chosen (Tab_Checked resets the sampler and _procsAt) or not drawn for a while (panel was hidden):
+        // start from a settled list, nothing glides from stale positions.
+        bool settle = (!force && _procsAt == Never) || now - _procsDrawnAt > 2500;
+        _procsDrawnAt = now;
+        if (_leaving is not null && !settle) return; // the rest glide up once the ended app is gone
+
         // Sample every 2 s, only while this tab is showing (see ProcessSampler).
-        bool changed = force;
-        if (Environment.TickCount64 - _procsAt >= 2000)
+        bool changed = force || settle;
+        if (now - _procsAt >= 2000)
         {
-            _procsAt = Environment.TickCount64;
+            _procsAt = now;
             _procs.Sample();
             changed = true;
         }
-        if (_armed is { } a && Environment.TickCount64 - a.At > 3000) { _armed = null; changed = true; }
-        // Rebuild rows only when something changed, so a click never lands on a button that was just replaced.
+        if (_armed is { } a && now - a.At > 3000) { _armed = null; changed = true; }
         if (!changed) return;
 
         SortCpu.Style = (Style)FindResource(_byRam ? "Seg" : "SegOn");
         SortRam.Style = (Style)FindResource(_byRam ? "SegOn" : "Seg");
 
-        ProcList.Children.Clear();
-        foreach (var app in _procs.Top(_byRam, 8))
+        if (settle)
         {
-            var row = new Grid { Height = 40 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
-
-            var name = new TextBlock
-            {
-                FontSize = 14,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = app.Name,
-            };
-            name.Inlines.Add(new Run(app.Name));
-            if (app.Count > 1)
-                name.Inlines.Add(new Run($" ×{app.Count}") { FontFamily = (FontFamily)Resources["Mono"], FontSize = 11, Foreground = (Brush)Resources["Faint"] });
-            var cpu = new TextBlock
-            {
-                Text = _procs.Measured ? $"{app.Cpu * 100:0.0}%" : "…",
-                Style = (Style)FindResource("Value"),
-                Foreground = (Brush)Resources[_byRam ? "SubText" : "Text"],
-            };
-            var ram = new TextBlock
-            {
-                Text = app.Ram >= 1L << 30 ? $"{app.Ram / (double)(1L << 30):0.0} GB" : $"{app.Ram >> 20} MB",
-                Style = (Style)FindResource("Value"),
-                Foreground = (Brush)Resources[_byRam ? "Text" : "SubText"],
-            };
-            Grid.SetColumn(cpu, 1);
-            Grid.SetColumn(ram, 2);
-            row.Children.Add(name);
-            row.Children.Add(cpu);
-            row.Children.Add(ram);
-
-            if (ProcessSampler.CanEnd(app.Name))
-            {
-                bool armed = _armed?.Name == app.Name;
-                var end = new Button
-                {
-                    Style = (Style)FindResource(armed ? "MiniDanger" : "Mini"),
-                    Content = armed ? "End?" : "End",
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Tag = app.Name,
-                    ToolTip = armed ? $"Click again to end {app.Name}" : $"End {app.Name}",
-                };
-                AutomationProperties.SetName(end, $"End {app.Name}");
-                end.Click += EndTask_Click;
-                Grid.SetColumn(end, 3);
-                row.Children.Add(end);
-            }
-            // Hairline above every row.
-            ProcList.Children.Add(new Border { BorderBrush = (Brush)Resources["CardBorder"], BorderThickness = new Thickness(0, 1, 0, 0), Child = row });
+            _leaving = null;
+            _rows.Clear();
+            ProcList.Children.Clear(); // drops the old rows with any animation still running on them
         }
+
+        var top = _procs.Top(_byRam, 8).ToList();
+        double pitch = ProcList.Children.Count > 0 && ProcList.Children[0] is FrameworkElement { ActualHeight: > 0 } first
+            ? first.ActualHeight : 41; // 40 px row + 1 px hairline
+        // Where each surviving row is now (rows below one that leaves glide up into its slot).
+        var was = new Dictionary<ProcRow, int>();
+        foreach (var app in top)
+            if (_rows.TryGetValue(app.Name, out var r)) was[r] = ProcList.Children.IndexOf(r.Root);
+        foreach (var gone in _rows.Keys.Except(top.Select(x => x.Name)).ToList()) _rows.Remove(gone);
+        var kept = new HashSet<UIElement>(_rows.Values.Select(x => (UIElement)x.Root));
+        for (int i = ProcList.Children.Count - 1; i >= 0; i--)
+            if (!kept.Contains(ProcList.Children[i])) ProcList.Children.RemoveAt(i);
+
+        for (int i = 0; i < top.Count; i++)
+        {
+            var app = top[i];
+            bool fresh = !_rows.TryGetValue(app.Name, out var row);
+            if (row is null) _rows[app.Name] = row = NewRow(app.Name);
+            UpdateRow(row, app);
+
+            // Children stay in ranked order (keyboard order, SelfTest); move only what's out of place.
+            if (ProcList.Children.IndexOf(row.Root) != i)
+            {
+                ProcList.Children.Remove(row.Root);
+                ProcList.Children.Insert(i, row.Root);
+            }
+
+            if (settle) continue;
+            if (fresh) Motion.FromTo(row.Root, OpacityProperty, 0, 1, 500, fade: true);
+            else if (was.TryGetValue(row, out int slot) && slot >= 0 && slot != i)
+            {
+                // FLIP: start where it was on screen (including a glide in flight), then ease into the new slot.
+                Motion.FromTo(row.Shift, TranslateTransform.YProperty, row.Shift.Y + (slot - i) * pitch, 0, 800);
+            }
+        }
+    }
+
+    ProcRow NewRow(string app)
+    {
+        var root = new Grid();
+        var shift = new TranslateTransform();
+        root.RenderTransform = shift;
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(50) });
+
+        // Hairline above every row.
+        var hairline = new Border { Background = (Brush)Resources["CardBorder"] };
+        Grid.SetColumnSpan(hairline, 4);
+        root.Children.Add(hairline);
+
+        var name = new TextBlock
+        {
+            FontSize = 14,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = app,
+        };
+        var count = new Run { FontFamily = (FontFamily)Resources["Mono"], FontSize = 11, Foreground = (Brush)Resources["Faint"] };
+        name.Inlines.Add(new Run(app));
+        name.Inlines.Add(count);
+        var cpu = new TextBlock { Style = (Style)FindResource("Value") };
+        var ram = new TextBlock { Style = (Style)FindResource("Value") };
+        Grid.SetRow(name, 1);
+        Grid.SetRow(cpu, 1);
+        Grid.SetRow(ram, 1);
+        Grid.SetColumn(cpu, 1);
+        Grid.SetColumn(ram, 2);
+        root.Children.Add(name);
+        root.Children.Add(cpu);
+        root.Children.Add(ram);
+
+        var danger = ((SolidColorBrush)Resources["Danger"]).Color;
+        var fill = new SolidColorBrush(Color.FromArgb(0, danger.R, danger.G, danger.B)); // clear red: fades in as pure alpha
+        var ring = new SolidColorBrush(RestRing);
+        var ink = new SolidColorBrush(((SolidColorBrush)Resources["SubText"]).Color);
+        // Inside the pill's bottom edge (24 px pill centred in 40: inner bottom at 31), 8 px in from each side
+        // so the 12 px rounded ends clip nothing.
+        var drain = new Border
+        {
+            Height = 2,
+            Background = Brushes.White,
+            Opacity = 0.8,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 29, 8, 0),
+            RenderTransformOrigin = new Point(0, 0.5),
+            RenderTransform = new ScaleTransform(),
+            Visibility = Visibility.Collapsed,
+        };
+        Button? end = null;
+        if (ProcessSampler.CanEnd(app))
+        {
+            end = new Button
+            {
+                Style = (Style)FindResource("Mini"),
+                Content = "End",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Tag = app,
+                ToolTip = $"End {app}",
+                Background = fill,
+                BorderBrush = ring,
+                Foreground = ink,
+            };
+            AutomationProperties.SetName(end, $"End {app}");
+            end.Click += EndTask_Click;
+            end.SizeChanged += (_, e) => drain.Width = Math.Max(0, e.NewSize.Width - 16); // "End?" is wider than "End"
+            Grid.SetRow(end, 1);
+            Grid.SetColumn(end, 3);
+            root.Children.Add(end); // a direct child of the row: SelfTest finds End buttons in ProcList's Grids
+            Grid.SetRow(drain, 1);
+            Grid.SetColumn(drain, 3);
+            root.Children.Add(drain);
+        }
+        return new ProcRow(app, root, shift, count, cpu, ram, end, fill, ring, ink, drain);
+    }
+
+    void UpdateRow(ProcRow row, AppUsage app)
+    {
+        row.Count.Text = app.Count > 1 ? $" ×{app.Count}" : "";
+        row.Cpu.Text = _procs.Measured ? $"{app.Cpu * 100:0.0}%" : "…";
+        row.Cpu.Foreground = (Brush)Resources[_byRam ? "SubText" : "Text"];
+        row.Ram.Text = app.Ram >= 1L << 30 ? $"{app.Ram / (double)(1L << 30):0.0} GB" : $"{app.Ram >> 20} MB";
+        row.Ram.Foreground = (Brush)Resources[_byRam ? "Text" : "SubText"];
+
+        bool armed = _armed?.Name == app.Name;
+        if (row.End is not { } end || armed == row.Armed) return; // unchanged: a running drain keeps running
+        row.Armed = armed;
+        end.Content = armed ? "End?" : "End";
+        end.ToolTip = armed ? $"Click again to end {app.Name}" : $"End {app.Name}";
+
+        // Cross-fade to red "End?" and back (450 ms); instant under Motion.Off (red fill, white "End?").
+        var danger = ((SolidColorBrush)Resources["Danger"]).Color;
+        Tint(row.Fill, armed ? danger : Color.FromArgb(0, danger.R, danger.G, danger.B));
+        Tint(row.Ring, armed ? danger : RestRing);
+        Tint(row.Ink, armed ? Colors.White : ((SolidColorBrush)Resources["SubText"]).Color);
+
+        // The drain: full width → 0, linear, over what's left of the 3 s (all of it when just armed).
+        var scale = (ScaleTransform)row.Drain.RenderTransform;
+        if (armed && Motion.Enabled && _armed is { } a)
+        {
+            double left = Math.Clamp(3000 - (Environment.TickCount64 - a.At), 0, 3000);
+            row.Drain.Visibility = Visibility.Visible;
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(left / 3000, 0, TimeSpan.FromMilliseconds(left)));
+        }
+        else
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            row.Drain.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    static void Tint(SolidColorBrush brush, Color to)
+    {
+        if (!Motion.Fades)
+        {
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+            brush.Color = to;
+            return;
+        }
+        var a = new ColorAnimationUsingKeyFrames();
+        a.KeyFrames.Add(new SplineColorKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(450)), Motion.Soft));
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, a);
     }
 
     void Sort_Click(object sender, RoutedEventArgs e)
@@ -482,14 +626,38 @@ public partial class PanelWindow : Window
             // Two-step: first click arms for 3 s, second click ends.
             _armed = (name, Environment.TickCount64);
             ProcStatus.Text = "";
+            RefreshProcesses(force: true);
+            return;
         }
-        else
+        _armed = null;
+        string? error = ProcessSampler.End(name);
+        ProcStatus.Text = error ?? $"Ended {name}.";
+        if (error is null && Motion.Enabled && _rows.TryGetValue(name, out var row) && row.Root.IsVisible)
         {
-            _armed = null;
-            ProcStatus.Text = ProcessSampler.End(name) ?? $"Ended {name}.";
-            _procsAt = Never; // re-sample now
+            Leave(row);
+            return;
         }
+        _procsAt = Never; // re-sample now
         RefreshProcesses(force: true);
+    }
+
+    /// <summary>The ended app's row fades out and slides 6 px left (500 ms); then the list re-samples and the rest glide up.</summary>
+    void Leave(ProcRow row)
+    {
+        _leaving = row;
+        row.Root.IsHitTestVisible = false;
+        var fade = Motion.To(0, 500);
+        fade.Completed += (_, _) =>
+        {
+            if (_leaving != row) return; // the list was rebuilt meanwhile
+            _leaving = null;
+            _rows.Remove(row.Name); // its element stays one more sync, so the rows below glide from their old slots
+            _procsAt = Never; // re-sample now
+            if (ProcTab.IsChecked == true && IsVisible) RefreshProcesses(force: true);
+            else ProcList.Children.Remove(row.Root);
+        };
+        row.Root.BeginAnimation(OpacityProperty, fade);
+        row.Shift.BeginAnimation(TranslateTransform.XProperty, Motion.To(-6, 500));
     }
 
     string? _pillColor;

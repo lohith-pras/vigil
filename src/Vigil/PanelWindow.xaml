@@ -270,7 +270,7 @@
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
         </Style>
 
-        <!-- Small row action (End). -->
+        <!-- Small row action (End). Armed = red fill, "End?": code-behind tints its own brushes so it can cross-fade. -->
         <Style x:Key="Mini" TargetType="Button" BasedOn="{StaticResource Chip}">
             <Setter Property="Height" Value="24" />
             <Setter Property="Margin" Value="0" />
@@ -278,11 +278,6 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="BorderBrush" Value="#1AFFFFFF" />
             <Setter Property="Foreground" Value="{DynamicResource SubText}" />
-        </Style>
-        <Style x:Key="MiniDanger" TargetType="Button" BasedOn="{StaticResource Mini}">
-            <Setter Property="Background" Value="{DynamicResource Danger}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Danger}" />
-            <Setter Property="Foreground" Value="White" />
         </Style>
 
         <Style x:Key="Link" TargetType="Button">
