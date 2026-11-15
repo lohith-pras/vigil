@@ -4,12 +4,12 @@ The durable visual rules for the panel. Mockups: the "Vigil panel redesign" canv
 
 ## Idea
 
-A tray instrument, not a dashboard: readings set like a meter's display, separated by hairlines, on zinc-black glass. No cards inside cards, no uppercase eyebrows, no gradients.
+A tray instrument, not a dashboard: readings set like a meter's display, separated by hairlines, on pure black. No cards inside cards, no uppercase eyebrows, no gradients.
 
 ## Material
 
-- **Shell:** double bezel. 1 px ring `#1FFFFFFF`, 4 px of tinted glass `#0AFFFFFF`, then the panel `#CC09090B` (zinc-950 at 80 %).
-- **Glass:** Windows 11 acrylic behind the panel (`DWMWA_SYSTEMBACKDROP_TYPE` = transient window). Windows 10: the same layers over black, so solid near-black.
+- **Shell:** 1 px ring `#1FFFFFFF`, 4 px of black, then the panel, opaque `#000000`.
+- **No acrylic.** An 80 % panel over acrylic turned grey on bright wallpapers and with transparency effects off. Opaque black looks the same on every desktop and costs no compositor work.
 - **Hairlines** `#12FFFFFF` separate sections. Hover wash `#0AFFFFFF`.
 - **Hatch** (−45°, 1 px, every 5 px, `#24FFFFFF`) fills the unused part of every bar: headroom, not a grey track.
 - **Dot field** for history: 60 columns × 6 dots, unused dots `#10FFFFFF`, newest column cobalt.
@@ -47,12 +47,14 @@ Selected chips are inverted (white fill, black text), not cobalt.
 
 ## Controls
 
-- **Tabs:** icon only, no fill; the active one gets the sliding cobalt dot below.
-- **Chips:** 34 px pills, 1 px outline at rest, white when selected. Durations in Geist Mono.
+- **Tabs:** icon only, no fill. Inactive icons `#6B6B74`, the active one full white with the sliding cobalt dot below.
+- **Durations:** one 4 × 2 grid in a 10 px hairline frame with `#14FFFFFF` dividers. Cells are borderless; hover and the white selected fill sit 3 px inside the cell (radius 6). Durations in Geist Mono. Other chips (Until Start, apps) stay 34 px pills.
+- **Keep awake off:** the big reading shows `--:--` in Faint, with "Off · normal power settings" beside it.
 - **Switch:** 38 × 22, knob slides, track turns cobalt when on.
 - **Segmented control** (sort): two half-pills inside a hairline ring.
 - **Row action** (End): 24 px mini pill; armed = red fill, "End?".
-- **Footer:** two 36 px pills, Settings and Quit.
+- **Footer:** a hairline, then Settings (left) and Quit (right) as quiet SubText actions; hover adds a wash and white text.
+- **Header status:** the ram figure turns amber at 80 %, same rule as the System tab.
 
 ## Motion
 

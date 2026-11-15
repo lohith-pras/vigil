@@ -478,7 +478,7 @@ static class SelfTest
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            // The panel is transparent (acrylic shows through on Windows 11): paint a dark desktop behind it.
+            // The panel is opaque; paint a desktop behind the rounded corners.
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x1E)), null, new Rect(0, 0, w, h));
             dc.DrawRectangle(new VisualBrush(root)
             {

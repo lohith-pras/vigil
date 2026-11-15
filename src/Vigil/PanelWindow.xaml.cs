@@ -65,16 +65,8 @@ public partial class PanelWindow : Window
         int dark = 1;
         Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
 
-        // Windows 11 22H2+: real acrylic behind the panel. The window paints transparent and DWM fills it
-        // with blurred desktop; the panel's 80 % zinc layer sits on top. On Windows 10 (or if this fails)
-        // the transparent areas render black, which under the same layer is simply a solid near-black.
-        int acrylic = Native.DWMSBT_TRANSIENTWINDOW;
-        if (Native.DwmSetWindowAttribute(_hwnd, Native.DWMWA_SYSTEMBACKDROP_TYPE, ref acrylic, sizeof(int)) == 0)
-        {
-            var margins = new Native.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-            Native.DwmExtendFrameIntoClientArea(_hwnd, ref margins);
-            if (HwndSource.FromHwnd(_hwnd)?.CompositionTarget is { } target) target.BackgroundColor = Colors.Transparent;
-        }
+        // ponytail: no acrylic. An opaque panel looks the same on every desktop; acrylic under an 80 % layer
+        // turned grey over bright wallpapers or with transparency effects off.
     }
 
     /// <summary>Show next to the tray icon. cursor = click position in physical pixels.</summary>
@@ -373,9 +365,16 @@ public partial class PanelWindow : Window
 
         // Header: what's holding the PC awake, else the two numbers people glance for.
         HeaderDot.Visibility = HeaderPulse.Visibility = _awake.Holding ? Visibility.Visible : Visibility.Collapsed;
-        HeaderStatus.Text = _awake.Holding
-            ? "awake" + (_awake.Remaining is { } left ? $" · {Short(left)}" : "")
-            : $"cpu {s.Cpu * 100:0}% · ram {s.RamFraction * 100:0}%";
+        if (_awake.Holding) HeaderStatus.Text = "awake" + (_awake.Remaining is { } left ? $" · {Short(left)}" : "");
+        else
+        {
+            // Memory at 80 % or more turns amber here too, same rule as the System tab.
+            HeaderStatus.Inlines.Clear();
+            HeaderStatus.Inlines.Add(new Run($"cpu {s.Cpu * 100:0}% · ram "));
+            var ram = new Run($"{s.RamFraction * 100:0}%");
+            if (s.RamFraction >= 0.8) ram.Foreground = (Brush)Resources["Warn"];
+            HeaderStatus.Inlines.Add(ram);
+        }
 
         RefreshBattery(s.Battery);
         if (!ReferenceEquals(_shownDisks, s.Disks)) RebuildDisks(s.Disks);
@@ -776,10 +775,10 @@ public partial class PanelWindow : Window
         // Big reading: the countdown when timed, otherwise the state in one word.
         AwakeBig.Text =
             a.PausedReason is not null ? "Paused"
-            : !a.Wanted ? "Off"
+            : !a.Wanted ? "--:--"
             : a.Remaining is { } left ? Clock(left)
             : "On";
-        var big = (Brush)Resources[a.Holding ? "Text" : "SubText"];
+        var big = (Brush)Resources[a.Holding ? "Text" : a.Wanted ? "SubText" : "Faint"];
         AwakeBig.Foreground = big;
         // While counting down (and motion is on) the same reading shows as rolling digits with a breathing colon.
         bool rolling = Motion.Enabled && a.PausedReason is null && a.Wanted && a.Remaining is not null;
@@ -794,7 +793,7 @@ public partial class PanelWindow : Window
         }
         AwakeStatus.Text =
             a.PausedReason is { } why ? why
-            : !a.Wanted ? "PC follows its normal power settings"
+            : !a.Wanted ? "Off · normal power settings"
             : !a.Active ? $"while {a.RunningApp} is open"
             : a.UntilTime is { } t ? $"left · until {t:HH:mm}"
             : a.Remaining is not null ? "left"
@@ -813,7 +812,7 @@ public partial class PanelWindow : Window
             bool on = (string)chip.Tag == "until"
                 ? a.Active && a.UntilTime is not null
                 : a.Active && a.UntilTime is null && ChipDuration(chip) == a.Duration;
-            chip.Style = (Style)FindResource(on ? "ChipOn" : "Chip");
+            chip.Style = (Style)FindResource(on ? "DurOn" : "Dur");
         }
 
         string apps = string.Join("|", a.WatchApps);
@@ -958,7 +957,7 @@ public partial class PanelWindow : Window
     {
         bool show = OptionsPanel.Visibility != Visibility.Visible;
         OptionsPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        OptionsToggle.Content = (show ? "⌄  " : "›  ") + "Options";
+        OptionsChevron.Text = show ? "\uE70D" : "\uE76C"; // ChevronDown : ChevronRight
     }
 
     void Settings_Click(object sender, RoutedEventArgs e)
@@ -995,7 +994,7 @@ public partial class PanelWindow : Window
     // ponytail: one dark palette (the design is dark-native); ForceLight is kept so old callers compile.
     static readonly Dictionary<string, string> Palette = new()
     {
-        ["Bg"] = "#CC09090B",         // panel: zinc-950 at 80 % over acrylic
+        ["Bg"] = "#FF000000",         // panel: opaque black
         ["Card"] = "#08FFFFFF",       // faint wells (speed test box)
         ["CardBorder"] = "#12FFFFFF", // hairlines
         ["Text"] = "#FAFAFA",

@@ -4,11 +4,11 @@
         xmlns:local="clr-namespace:Vigil"
         Title="Vigil" Width="348" Height="576"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
-        Background="Transparent" Foreground="{DynamicResource Text}"
+        Background="Black" Foreground="{DynamicResource Text}"
         FontFamily="{DynamicResource Sans}" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
     <!--
-      Design (docs/DESIGN.md): zinc-black acrylic in a double bezel; Geist for words, Geist Mono for every
+      Design (docs/DESIGN.md): opaque black in a hairline bezel; Geist for words, Geist Mono for every
       measurement; one cobalt dot marks "now" / "here" / "on"; hatch fills mark headroom; hairlines, no cards.
       Motion (one curve, Motion.Soft): open 400 ms 5 px rise + fade, sections stagger 70 ms; tab dot 550 ms with a
       stretch; press scale .97 / 140 ms; switch 200 / 180 ms; close instant. Ambient loops only while the panel shows.
@@ -128,7 +128,7 @@
 
         <Style x:Key="Tab" TargetType="RadioButton">
             <Setter Property="GroupName" Value="Tabs" />
-            <Setter Property="Foreground" Value="{DynamicResource Faint}" />
+            <Setter Property="Foreground" Value="#6B6B74" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
@@ -251,6 +251,49 @@
             </Setter>
         </Style>
 
+        <!-- Duration cell: borderless; the frame and dividers are drawn behind the grid. Fill sits 3 px inside. -->
+        <Style x:Key="Dur" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#D4D4D8" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoMedium}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="root" Background="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+                            <Grid Margin="3">
+                                <Border CornerRadius="6" Background="{TemplateBinding Background}" />
+                                <Border x:Name="hl" CornerRadius="6" Background="#12FFFFFF" BorderThickness="1" BorderBrush="Transparent" Opacity="0" />
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="hl" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="hl" Property="Opacity" Value="1" />
+                                <Setter TargetName="hl" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource PressIn}" /></Trigger.EnterActions>
+                                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource PressOut}" /></Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DurOn" TargetType="Button" BasedOn="{StaticResource Dur}">
+            <Setter Property="Background" Value="#FAFAFA" />
+            <Setter Property="Foreground" Value="#09090B" />
+        </Style>
+
         <Style x:Key="ChipOn" TargetType="Button" BasedOn="{StaticResource Chip}">
             <Setter Property="Background" Value="#FAFAFA" />
             <Setter Property="BorderBrush" Value="#FAFAFA" />
@@ -330,17 +373,40 @@
             </Setter>
         </Style>
 
-        <!-- Footer pills (Settings / Quit). -->
-        <Style x:Key="Footer" TargetType="Button" BasedOn="{StaticResource Chip}">
-            <Setter Property="Height" Value="36" />
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Background" Value="#08FFFFFF" />
-            <Setter Property="Foreground" Value="#E4E4E7" />
+        <!-- Footer actions (Settings / Quit): quiet text, a wash on hover. -->
+        <Style x:Key="Footer" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource SubText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="root" CornerRadius="8" Padding="8,6" Background="Transparent" BorderThickness="1"
+                                BorderBrush="Transparent" RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="root" Property="Background" Value="#0AFFFFFF" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="root" Property="BorderBrush" Value="{DynamicResource Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource PressIn}" /></Trigger.EnterActions>
+                                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource PressOut}" /></Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <!-- Double bezel: hairline ring, 4 px of tinted glass, then the panel. -->
-    <Border x:Name="Bezel" CornerRadius="8" BorderThickness="1" BorderBrush="#1FFFFFFF" Background="#0AFFFFFF" Padding="4">
+    <!-- Bezel: hairline ring, 4 px of black, then the panel. -->
+    <Border x:Name="Bezel" CornerRadius="8" BorderThickness="1" BorderBrush="#1FFFFFFF" Background="Black" Padding="4">
         <Border CornerRadius="6" Background="{DynamicResource Bg}" BorderThickness="0,1,0,0" BorderBrush="#10FFFFFF">
             <Grid x:Name="Shell" Margin="16,14,16,12" RenderTransformOrigin="0.5,0.5">
                 <Grid.RenderTransform><TranslateTransform /></Grid.RenderTransform>
@@ -441,17 +507,33 @@
                             </WrapPanel>
                             <ProgressBar x:Name="AwakeBar" Style="{StaticResource Bar}" Foreground="{DynamicResource Accent}"
                                          Margin="0,12,0,0" Visibility="Collapsed" />
-                            <UniformGrid x:Name="Chips" Columns="4" Margin="-3,16,-3,0" TextElement.FontFamily="{StaticResource MonoMedium}">
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="15" Content="15m" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="30" Content="30m" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="60" Content="1h" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="120" Content="2h" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="240" Content="4h" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="480" Content="8h" Click="Chip_Click" />
-                                <Button Style="{StaticResource Chip}" FontFamily="{StaticResource MonoMedium}" Tag="0" Content="∞" Click="Chip_Click"
-                                        AutomationProperties.Name="Indefinitely" />
-                                <Button Style="{StaticResource Chip}" Tag="until" Content="Until…" Click="Chip_Click" />
-                            </UniformGrid>
+                            <!-- Durations: one hairline frame, dividers behind borderless cells. -->
+                            <Border CornerRadius="10" BorderThickness="1" BorderBrush="#1AFFFFFF" Margin="0,16,0,0">
+                                <Grid>
+                                    <Grid IsHitTestVisible="False">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+                                        <Border Grid.Column="1" Grid.RowSpan="2" BorderThickness="1,0,0,0" BorderBrush="#14FFFFFF" />
+                                        <Border Grid.Column="2" Grid.RowSpan="2" BorderThickness="1,0,0,0" BorderBrush="#14FFFFFF" />
+                                        <Border Grid.Column="3" Grid.RowSpan="2" BorderThickness="1,0,0,0" BorderBrush="#14FFFFFF" />
+                                        <Border Grid.Row="1" Grid.ColumnSpan="4" BorderThickness="0,1,0,0" BorderBrush="#14FFFFFF" />
+                                    </Grid>
+                                    <UniformGrid x:Name="Chips" Columns="4">
+                                        <Button Style="{StaticResource Dur}" Tag="15" Content="15m" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="30" Content="30m" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="60" Content="1h" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="120" Content="2h" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="240" Content="4h" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="480" Content="8h" Click="Chip_Click" />
+                                        <Button Style="{StaticResource Dur}" Tag="0" Content="∞" Click="Chip_Click"
+                                                AutomationProperties.Name="Indefinitely" />
+                                        <Button Style="{StaticResource Dur}" FontFamily="{DynamicResource SansMedium}" Tag="until" Content="Until"
+                                                AutomationProperties.Name="Until a time" Click="Chip_Click" />
+                                    </UniformGrid>
+                                </Grid>
+                            </Border>
                             <StackPanel x:Name="UntilRow" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
                                 <TextBlock Text="Until" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{DynamicResource SubText}" />
                                 <TextBox x:Name="UntilBox" Style="{StaticResource Field}" Width="76"
@@ -462,10 +544,16 @@
                                            VerticalAlignment="Center" Margin="8,0,0,0" />
                             </StackPanel>
                             <TextBlock Style="{StaticResource Muted}" Margin="0,12,0,0"
-                                       Text="Click a chip to start. Click it again to stop." />
+                                       Text="Pick a time to start, pick it again to stop" />
                             <Border Style="{StaticResource Divider}" Margin="0,18,0,14" />
-                            <Button x:Name="OptionsToggle" Style="{StaticResource Link}" Content="›  Options"
-                                    HorizontalAlignment="Left" Click="OptionsToggle_Click" />
+                            <Button x:Name="OptionsToggle" Style="{StaticResource Link}" Foreground="{DynamicResource SubText}"
+                                    HorizontalAlignment="Left" Click="OptionsToggle_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="OptionsChevron" Text="&#xE76C;" FontFamily="{StaticResource Icons}" FontSize="10"
+                                               Width="16" VerticalAlignment="Center" Margin="0,1,4,0" />
+                                    <TextBlock Text="Options" />
+                                </StackPanel>
+                            </Button>
                             <StackPanel x:Name="OptionsPanel" Visibility="Collapsed" Margin="0,8,0,0">
                                 <Grid Margin="0,6,0,0">
                                     <StackPanel Margin="0,0,52,0">
@@ -662,26 +750,23 @@
                     </Grid>
                 </ScrollViewer>
 
-                <!-- Footer -->
-                <Grid Grid.Row="3" Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="SettingsButton" Style="{StaticResource Footer}" Click="Settings_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,1,8,0" />
-                            <TextBlock Text="Settings" />
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Style="{StaticResource Footer}" Click="Quit_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,1,8,0" />
-                            <TextBlock Text="Quit" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                <!-- Footer: hairline, then two quiet text actions at the ends -->
+                <Border Grid.Row="3" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardBorder}" Padding="0,8,0,0" Margin="0,4,0,0">
+                    <Grid Margin="-8,0">
+                        <Button x:Name="SettingsButton" Style="{StaticResource Footer}" HorizontalAlignment="Left" Click="Settings_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="14" VerticalAlignment="Center" Margin="0,1,8,0" />
+                                <TextBlock Text="Settings" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource Footer}" HorizontalAlignment="Right" Click="Quit_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="14" VerticalAlignment="Center" Margin="0,1,8,0" />
+                                <TextBlock Text="Quit" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
     </Border>
