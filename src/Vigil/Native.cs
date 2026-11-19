@@ -1,6 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
 
+// Load native DLLs (dxva2, setupapi, dwmapi, ...) only from System32, never from the exe's folder:
+// Vigil is often run from Downloads, where a planted dxva2.dll would otherwise be picked up.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace Vigil;
 
 static class Native

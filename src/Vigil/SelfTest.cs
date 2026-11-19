@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
@@ -120,6 +121,29 @@ static class SelfTest
                 var big = Updater.Parse(doc.RootElement, "Vigil-standalone.exe");
                 Check(small is { Size: 123, Sha256: "ABCD" } && small.Version == new Version(9, 8, 7)
                       && big is { AssetUrl: "https://example/b", Sha256: null }, "Update release parsing");
+            }
+
+            // Updater fails closed: only a GitHub release asset of this repo, sane size, with a SHA-256.
+            {
+                string sha = new string('a', 64), url = "https://github.com/lohith-pras/vigil/releases/download/v9.8.7/Vigil.exe";
+                Release R(string u, long size, string? h) => new(new Version(9, 8, 7), "v9.8.7", "", "Vigil.exe", u, size, h);
+                Check(Updater.Problem(R(url, 123, sha)) is null, "Updater accepts a checksummed release asset");
+                Check(Updater.Problem(R(url, 123, null)) is not null, "Updater refuses a release without a checksum");
+                Check(Updater.Problem(R(url, 123, "zz")) is not null, "Updater refuses a malformed checksum");
+                Check(Updater.Problem(R("https://evil.example/Vigil.exe", 123, sha)) is not null
+                      && Updater.Problem(R("http://github.com/lohith-pras/vigil/releases/download/v9/Vigil.exe", 123, sha)) is not null
+                      && Updater.Problem(R("https://github.com/lohith-pras/vigil/releases/download/../../x/Vigil.exe", 123, sha)) is not null,
+                      "Updater refuses other hosts, plain http and path tricks");
+                Check(Updater.Problem(R(url, 0, sha)) is not null && Updater.Problem(R(url, 1L << 40, sha)) is not null,
+                      "Updater refuses an empty or huge asset");
+            }
+
+            // A tampered settings.json is clamped to values the UI can produce.
+            {
+                var bad = System.Text.Json.JsonSerializer.Deserialize<Settings>(
+                    """{"ChargeLimit":-5,"WatchApps":[null,"", "a/b","obs64","OBS64","..\\x"],"AnnouncedVersion":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}""")!.Sane();
+                Check(bad.ChargeLimit == 100 && bad.WatchApps.SequenceEqual(new[] { "obs64" }) && bad.AnnouncedVersion is null,
+                      "Tampered settings are clamped");
             }
             try
             {
@@ -269,6 +293,17 @@ static class SelfTest
         Check(!page.Loading && screens is not null, $"Displays tab loads off the UI thread: {screens?.Count} screen(s), mode {Displays.CurrentMode()}");
         foreach (var s in screens!) Note($"      {s}");
         Check(screens.Count > 0, "At least one display found");
+
+        // Native DLLs must come from System32, never from beside the exe (DefaultDllImportSearchPaths).
+        using (var self = Process.GetCurrentProcess())
+        {
+            var names = new[] { "dxva2.dll", "setupapi.dll", "dwmapi.dll" };
+            var loaded = self.Modules.Cast<ProcessModule>().Where(m => names.Contains(m.ModuleName, StringComparer.OrdinalIgnoreCase)).ToList();
+            foreach (var m in loaded) Note($"      {m.ModuleName}: {m.FileName}");
+            if (loaded.Count == 0) Note("warn  No native display DLLs loaded yet: path check skipped");
+            Check(loaded.All(m => m.FileName.StartsWith(Environment.SystemDirectory + "\\", StringComparison.OrdinalIgnoreCase)),
+                  "Native DLLs load from System32");
+        }
         Save(panel, Path.Combine(dir, "panel-dark-2-displays.png"));
         if (screens.Any(s => s.Controls.Count == 0))
             Check(Texts(page).Contains("This monitor doesn't support control"), "Unsupported monitor message renders");
