@@ -18,6 +18,9 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <Version>0.4.0</Version>
     <Product>Vigil</Product>
+    <!-- Security analyzers (CA2xxx/CA3xxx/CA5xxx) on top of the default rules; any CA warning fails the build. -->
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
