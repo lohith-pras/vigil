@@ -1,7 +1,8 @@
 name: build
 
-# Every push to main builds the exe (download it from the run's Artifacts).
-# Pushing a tag like v0.1.0 also publishes a GitHub Release with both exes.
+# Every push to main or feature/** builds both exes and runs the self-test (download them from the run's Artifacts).
+# Pushing a tag like v0.5.0 also publishes a GitHub Release, from a separate job that needs approval
+# in the `release` environment (Settings > Environments > release > Required reviewers).
 on:
   push:
     branches: [main, 'feature/**']
@@ -9,8 +10,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only by default; only the release job can write.
 permissions:
-  contents: write
+  contents: read
 
 # A newer push cancels an older build of the same branch that's still queued or running.
 concurrency:
@@ -21,25 +23,33 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
 
-      - name: Version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Fails on any known-vulnerable package, direct or transitive. Also fails the build on any CA analyzer warning (csproj).
+      - name: Vulnerable packages
         shell: pwsh
-        run: echo "VERSION_ARGS=-p:Version=$($env:GITHUB_REF_NAME.TrimStart('v'))" >> $env:GITHUB_ENV
+        run: |
+          dotnet restore src/Vigil
+          $out = dotnet list src/Vigil package --vulnerable --include-transitive | Out-String
+          $out
+          if ($LASTEXITCODE -ne 0 -or $out -match 'has the following vulnerable packages') { Write-Error 'Vulnerable package found'; exit 1 }
 
-      # Small exe; needs the .NET 10 Desktop Runtime installed.
-      - name: Publish (framework-dependent)
-        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/fd
-
-      # Big exe; runs with nothing installed. Not compressed: compression unpacks the whole
-      # bundle into RAM at start (measured: 86 MB idle vs 10 MB uncompressed).
-      - name: Publish (self-contained)
-        run: dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none ${{ env.VERSION_ARGS }} -o out/sc
+      # Small exe needs the .NET 10 Desktop Runtime; the standalone one runs with nothing installed.
+      # Standalone is not compressed: compression unpacks the whole bundle into RAM at start (86 MB idle vs 10 MB).
+      - name: Publish
+        shell: pwsh
+        run: |
+          $v = @(); if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = @("-p:Version=$($env:GITHUB_REF_NAME.TrimStart('v'))") }
+          dotnet publish src/Vigil -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none @v -o out/fd
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet publish src/Vigil -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none @v -o out/sc
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       # Run the real exe: open the panel, click through everything, screenshot it.
       # Any exception fails the build, so a broken exe never reaches a release.
@@ -72,7 +82,7 @@ jobs:
             "Task Manager 'Memory' (private working set) per second: $($samples -join ' ')"
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: selftest
@@ -86,16 +96,63 @@ jobs:
           Copy-Item out/sc/Vigil.exe dist/Vigil-standalone.exe
           Get-ChildItem dist | Format-Table Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Vigil
           path: dist/
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  # Static security scan of the C# source; results go to the repo's Security tab.
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: csharp
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+
+  # Secrets anywhere in the git history, and unsafe patterns in these workflows.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: false
+
+  # Tags only, after every check passed, and only once someone approves the `release` environment.
+  # The future SignPath signing step goes here, between download and publish.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, codeql, lint]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Vigil
+          path: dist
+
+      # If the release already exists (e.g. created by hand), just replace its files.
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        # If the release already exists (e.g. created by hand), just replace its files.
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release create ${{ github.ref_name }} dist/Vigil.exe dist/Vigil-standalone.exe --generate-notes
-          if ($LASTEXITCODE -ne 0) { gh release upload ${{ github.ref_name }} dist/Vigil.exe dist/Vigil-standalone.exe --clobber }
+          gh release create "$GITHUB_REF_NAME" dist/Vigil.exe dist/Vigil-standalone.exe --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" dist/Vigil.exe dist/Vigil-standalone.exe --clobber
