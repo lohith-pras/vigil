@@ -45,7 +45,7 @@ Every push to `main` or a `feature/**` branch is built by GitHub Actions, which 
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-GitHub Actions builds both exes, runs the self-test, and only then publishes the release.
+GitHub Actions builds both exes, runs the self-test and the security checks, then waits for approval in the `release` environment before publishing the release.
 
 ## Start with Windows
 
