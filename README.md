@@ -9,7 +9,9 @@ A tiny Windows tray utility, inspired by the macOS menu-bar toolkit Vorssaint.
 - **Processes**: top apps by CPU or RAM, with End task.
 - **Keep awake**: stop the PC sleeping (optionally the display too) for 15m–8h, until a time, or indefinitely; only when plugged in, pause when locked, or automatically while chosen apps are open.
 
-> **Status:** v0.2. Next: a Displays tab (brightness, refresh rate, display mode). See [docs/SPEC.md](docs/SPEC.md).
+- **Displays**: brightness, contrast and volume (DDC/CI), refresh rate, display mode, turn screens off.
+
+Free and open source (MIT). No telemetry. ≈10 MB of RAM when idle.
 
 ## Download
 
@@ -49,6 +51,14 @@ GitHub Actions builds both exes, runs the self-test, and only then publishes the
 
 Panel → **Settings → Start with Windows** (or right-click the tray icon). Adds Vigil to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; no admin needed.
 
+## Privacy and security
+
+No telemetry; the only network calls are listed above. Details: [docs/PRIVACY.md](docs/PRIVACY.md). Found a vulnerability? See [SECURITY.md](SECURITY.md) and report it privately. Code-signing plans: [docs/CODE-SIGNING.md](docs/CODE-SIGNING.md).
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes within the performance budget (≈10 MB idle, under 1 % CPU, nothing sampled unless it's on screen) and make sure the CI self-test passes; [docs/SPEC.md](docs/SPEC.md) and [docs/DESIGN.md](docs/DESIGN.md) explain how things are built.
+
 ## License
 
-MIT
+[MIT](LICENSE)
