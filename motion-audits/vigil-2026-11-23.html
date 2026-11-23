@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vigil motion audit — 2026-11-23</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:oklch(0.155 0.006 255);--surface:oklch(0.195 0.007 255);--surface-2:oklch(0.235 0.008 255);
+  --paper:oklch(0.945 0.004 255);--paper-dim:oklch(0.800 0.006 255);--muted:oklch(0.680 0.008 255);--faint:oklch(0.505 0.008 255);
+  --line:oklch(0.95 0.01 255 / 0.09);--line-strong:oklch(0.95 0.01 255 / 0.16);
+  --accent:var(--paper);--accent-soft:var(--paper-dim);--accent-tint:oklch(0.95 0.01 255 / 0.06);
+  --crit:oklch(0.655 0.185 25);--imp:oklch(0.805 0.125 78);--opp:oklch(0.745 0.135 152);
+  --t-good:oklch(0.745 0.135 152);--t-mid:oklch(0.805 0.125 78);--t-slow:oklch(0.655 0.185 25);
+  --display:"Familjen Grotesk","Hanken Grotesk",system-ui,sans-serif;
+  --sans:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+:root:has(#theme-light:checked){
+  --ink:oklch(0.985 0.003 255);--surface:oklch(0.965 0.004 255);--surface-2:oklch(0.940 0.005 255);
+  --paper:oklch(0.180 0.006 255);--paper-dim:oklch(0.330 0.008 255);--muted:oklch(0.475 0.010 255);--faint:oklch(0.640 0.009 255);
+  --line:oklch(0.180 0.010 255 / 0.12);--line-strong:oklch(0.180 0.010 255 / 0.22);--accent-tint:oklch(0.18 0.01 255 / 0.05);
+  --crit:oklch(0.555 0.195 25);--imp:oklch(0.625 0.135 70);--opp:oklch(0.555 0.135 152);
+  --t-good:oklch(0.555 0.135 152);--t-mid:oklch(0.625 0.135 70);--t-slow:oklch(0.555 0.195 25);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1120px;margin:0 auto;padding:40px 32px 80px}
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+a{color:inherit}
+code{font-family:var(--mono);font-size:.86em;background:var(--accent-tint);padding:1px 5px;border-radius:4px}
+.mono-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.theme-switch{display:flex;justify-content:flex-end;margin-bottom:28px}
+.theme-switch .seg label{font-size:10px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:100px;overflow:hidden}
+.seg label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:4px 10px;cursor:pointer;user-select:none;transition:background .15s ease,color .15s ease}
+#theme-dark:checked ~ .wrap .theme-switch label[for="theme-dark"],
+#theme-light:checked ~ .wrap .theme-switch label[for="theme-light"]{background:color-mix(in oklch,var(--paper) 12%,transparent);color:var(--paper)}
+header .title{font-family:var(--display);font-size:40px;line-height:1.1;font-weight:600;margin:10px 0 12px;letter-spacing:-.01em}
+.lede{color:var(--paper-dim);max-width:760px;margin:0 0 14px}
+.meta-row{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap}
+.stats{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}
+.stat{display:block;text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:12px 16px;min-width:130px;background:var(--surface)}
+.stat b{display:block;font-family:var(--display);font-size:28px;font-weight:600}
+.stat span{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat[data-sev=crit] b{color:var(--crit)}.stat[data-sev=imp] b{color:var(--imp)}.stat[data-sev=opp] b{color:var(--opp)}
+section{margin-top:56px}
+h2{font-family:var(--display);font-size:24px;font-weight:600;margin:6px 0 18px}
+.assessment p{font-family:var(--display);font-size:21px;line-height:1.45;max-width:900px;margin:8px 0 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:8px 12px;border-bottom:1px solid var(--line-strong)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.lens-table tr{transition:border-color .2s ease}
+.chip{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line-strong);border-radius:100px;padding:1px 8px;color:var(--muted);margin-left:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+.dot.crit{background:var(--crit)}.dot.imp{background:var(--imp)}.dot.opp{background:var(--opp)}
+.timing-figure{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:20px;display:grid;grid-template-columns:1fr 300px;gap:24px}
+.timing-figure svg{width:100%;height:auto}
+.tz-good{fill:var(--t-good);opacity:.12}.tz-mid{fill:var(--t-mid);opacity:.12}.tz-slow{fill:var(--t-slow);opacity:.12}
+.tz-lab{font-family:var(--mono);font-size:10px;fill:var(--muted)}
+.tick{stroke:var(--line-strong)}
+.pt-good{fill:var(--t-good)}.pt-mid{fill:var(--t-mid)}.pt-slow{fill:var(--t-slow)}
+.pt-num{font-family:var(--mono);font-size:9.5px;font-weight:600;fill:oklch(0.16 0.006 255)}
+:root:has(#theme-light:checked) .pt-num{fill:oklch(0.985 0.003 255)}
+.key{list-style:none;margin:0;padding:0;font-size:13px}
+.key li{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--line)}
+.key li b{font-family:var(--mono);font-size:11px;min-width:20px;color:var(--muted)}
+.key li span.ms{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.off{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px;font-size:14px;color:var(--paper-dim)}
+.lens-sec{border-top:1px solid var(--line-strong);padding-top:22px}
+.lens-sec__head{display:flex;align-items:baseline;gap:12px}
+.lens-sec__head h3{font-family:var(--display);font-size:22px;font-weight:600;margin:0}
+.lens-sec__verdict{color:var(--paper-dim);margin:8px 0 18px}
+.lens-block{margin:18px 0}
+.lens-block > .mono-label{display:block;margin-bottom:10px}
+.lens-list{list-style:none;margin:0;padding:0}
+.lens-list li{padding:7px 0 7px 26px;position:relative;border-bottom:1px solid var(--line);font-size:14.5px}
+.lens-list.good li::before{content:"✓";position:absolute;left:4px;color:var(--opp);font-weight:700}
+.lens-list.opp li::before{content:"💡";position:absolute;left:0;font-size:13px}
+.lens-take{margin-top:18px;padding:14px 16px;border-left:2px solid var(--line-strong);background:var(--accent-tint);border-radius:0 8px 8px 0;font-size:14.5px}
+.finding-row{display:grid;grid-template-columns:1fr 380px;gap:28px;border:1px solid var(--line);border-radius:12px;padding:22px;margin:14px 0;background:var(--surface);transition:border-color .2s ease}
+.finding-row[data-sev=crit]{border-left:3px solid var(--crit)}.finding-row[data-sev=imp]{border-left:3px solid var(--imp)}
+@media (max-width:860px){.finding-row,.timing-figure{grid-template-columns:1fr}}
+.find-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-radius:100px;padding:2px 8px;border:1px solid var(--line-strong);color:var(--muted)}
+.tag.crit{color:var(--crit);border-color:color-mix(in oklch,var(--crit) 45%,transparent)}
+.tag.imp{color:var(--imp);border-color:color-mix(in oklch,var(--imp) 45%,transparent)}
+.find-title{font-family:var(--display);font-size:18px;font-weight:600;margin:0 0 10px}
+.find-body p{margin:0 0 10px;font-size:14.5px}
+.find-body .label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.fix{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--accent-tint);margin-bottom:10px}
+.fix p{margin:0}
+.find-loc{font-size:12.5px;color:var(--muted)}
+.tier-label{display:flex;align-items:center;gap:12px;margin:26px 0 8px}
+.tier-label .mono-label{white-space:nowrap}
+.tier-label hr{flex:1;border:0;border-top:1px solid var(--line)}
+.tier-label .n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+#rec-crit .mono-label{color:var(--crit)}#rec-imp .mono-label{color:var(--imp)}#rec-opp .mono-label{color:var(--opp)}
+.ref-summary{border:1px solid var(--line);border-radius:12px;padding:20px;background:var(--surface)}
+.ref-summary p{margin:0 0 8px}
+footer{margin-top:56px;font-family:var(--mono);font-size:11px;color:var(--faint);border-top:1px solid var(--line);padding-top:14px}
+
+/* ───── demo shell ───── */
+.demo{position:relative;width:100%;max-width:380px}
+.demo__bar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.demo__meta{min-width:0}
+.demo__title{display:block;font-size:13.5px;font-weight:600;color:var(--paper);line-height:1.3}
+.demo__timing{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.demo__controls{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.demo__loop{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.demo input[id$="-a"]:checked ~ .demo__bar .seg label[for$="-a"],
+.demo input[id$="-l"]:checked ~ .demo__bar .seg label[for$="-l"],
+.demo input[id$="-d"]:checked ~ .demo__bar .seg label[for$="-d"]{background:color-mix(in oklch,var(--paper) 12%,transparent);color:var(--paper)}
+.demo__stage{--st-bg:var(--surface-2);--st-fg:var(--paper);--st-line:var(--line-strong);--st-dim:color-mix(in oklch,var(--paper) 55%,transparent);
+  background:var(--st-bg);color:var(--st-fg);border:1px solid var(--line);border-radius:10px;padding:28px 24px;min-height:168px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.demo input[id$="-l"]:checked ~ .demo__stage{--st-bg:oklch(0.985 0.003 255);--st-fg:oklch(0.180 0.006 255);--st-line:oklch(0.180 0.010 255 / 0.18);--st-dim:oklch(0.180 0.010 255 / 0.45)}
+.demo input[id$="-d"]:checked ~ .demo__stage{--st-bg:oklch(0.180 0.006 255);--st-fg:oklch(0.985 0.003 255);--st-line:oklch(0.985 0.010 255 / 0.18);--st-dim:oklch(0.985 0.010 255 / 0.50)}
+.ui-card{background:var(--st-bg);border:1px solid var(--st-line);border-radius:12px;padding:14px 16px;min-width:220px;box-shadow:0 8px 24px oklch(0 0 0 / .14)}
+.ui-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--st-fg)}
+.ui-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--st-dim)}
+.ui-num{font-family:var(--mono);font-size:26px;font-weight:500;color:var(--st-fg);font-variant-numeric:tabular-nums}
+.ui-bar{height:6px;border-radius:3px;border:1px solid var(--st-line);overflow:hidden;width:180px}
+.ui-bar i{display:block;height:100%;background:var(--st-fg);transform-origin:left center}
+.ui-chip{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 14px;border-radius:100px;border:1px solid var(--st-line);font-family:var(--mono);font-size:12px;color:var(--st-fg);position:relative;overflow:hidden}
+.ui-tabs{display:flex;gap:4px;position:relative;padding-bottom:10px}
+.ui-tab{width:34px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--st-dim);font-size:13px;font-family:var(--mono)}
+.ui-tabdot{position:absolute;bottom:0;left:15px;width:5px;height:5px;border-radius:50%;background:oklch(0.62 0.17 262)}
+@media (prefers-reduced-motion: reduce){
+  .demo__loop{display:none}
+  [class*="__mt"],[class*="__mt"] *{animation:none !important;transition:none !important}
+}
+
+/* ───── per-finding motion (n = 1-indexed across report) ───── */
+@media (prefers-reduced-motion: no-preference){
+  /* 1 · panel open: 160ms, no stagger */
+  @keyframes m1{0%{opacity:0;transform:translateY(4px)}5.3%{opacity:1;transform:translateY(0)}100%{opacity:1;transform:translateY(0)}}
+  .demo-1__mt{animation:m1 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  /* 2 · tab dot: 200ms ease-out, no stretch; page crossfade 150ms */
+  @keyframes m2dot{0%{transform:translateX(0)}6.7%{transform:translateX(114px)}50%{transform:translateX(114px)}56.7%{transform:translateX(0)}100%{transform:translateX(0)}}
+  .demo-2__mt .ui-tabdot{animation:m2dot 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  @keyframes m2a{0%{opacity:1}5%{opacity:0}50%{opacity:0}55%{opacity:1}100%{opacity:1}}
+  @keyframes m2b{0%{opacity:0}5%{opacity:1}50%{opacity:1}55%{opacity:0}100%{opacity:0}}
+  .demo-2__mt .pa{animation:m2a 3s linear infinite}.demo-2__mt .pb{animation:m2b 3s linear infinite}
+  /* 3 · awake dot: one ring on state change, then still */
+  @keyframes m3{0%{transform:scale(1);opacity:.35}20%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
+  .demo-3__mt .ring{animation:m3 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  /* 4 · readout + bar: 180ms digits, 300ms bar */
+  @keyframes m4n{0%{opacity:0;transform:translateY(5px)}6%{opacity:1;transform:translateY(0)}100%{opacity:1;transform:translateY(0)}}
+  .demo-4__mt .roll{display:inline-block;animation:m4n 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  @keyframes m4b{0%{transform:scaleX(.42)}10%{transform:scaleX(.61)}100%{transform:scaleX(.61)}}
+  .demo-4__mt .ui-bar i{animation:m4b 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  /* 5 · curve: enter on strong ease-out vs current Soft */
+  @keyframes m5{0%{opacity:0;transform:translateY(8px)}8%{opacity:1;transform:translateY(0)}100%{opacity:1;transform:translateY(0)}}
+  .demo-5__mt .fast{animation:m5 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  .demo-5__mt .soft{animation:m5 3s cubic-bezier(0.45,0.05,0.25,1) infinite}
+  /* 6 · chip fill from click point: 240ms */
+  @keyframes m6{0%{clip-path:circle(0% at 30% 50%)}8%{clip-path:circle(120% at 30% 50%)}100%{clip-path:circle(120% at 30% 50%)}}
+  .demo-6__mt .fill{animation:m6 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  /* 7 · process row exit 200ms, rest glide 300ms */
+  @keyframes m7x{0%{opacity:1;transform:translateX(0)}6.7%{opacity:0;transform:translateX(-4px)}100%{opacity:0;transform:translateX(-4px)}}
+  @keyframes m7y{0%,6.7%{transform:translateY(0)}16.7%{transform:translateY(-28px)}100%{transform:translateY(-28px)}}
+  .demo-7__mt .gone{animation:m7x 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  .demo-7__mt .rest{animation:m7y 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  /* 8 · Options disclosure: 180ms fade + 4px, chevron rotates */
+  @keyframes m8c{0%{opacity:0;transform:translateY(-4px)}6%{opacity:1;transform:translateY(0)}100%{opacity:1;transform:translateY(0)}}
+  @keyframes m8r{0%{transform:rotate(0)}6%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}
+  .demo-8__mt .body{animation:m8c 3s cubic-bezier(0.23,1,0.32,1) infinite}
+  .demo-8__mt .chev{display:inline-block;animation:m8r 3s cubic-bezier(0.23,1,0.32,1) infinite}
+}
+.demo-2__mt .pages{position:relative;height:20px;margin-top:10px}
+.demo-2__mt .pages div{position:absolute;inset:0;font-size:12px;color:var(--st-dim)}
+.demo-2__mt .pb{opacity:0}
+.demo-3__mt{position:relative;display:flex;align-items:center;gap:10px}
+.demo-3__mt .d{position:relative;width:8px;height:8px}
+.demo-3__mt .d i{position:absolute;inset:0;border-radius:50%;background:oklch(0.78 0.16 155)}
+.demo-3__mt .ring{opacity:0;transform:scale(2.4)}
+.demo-6__mt .fill{position:absolute;inset:0;background:var(--st-fg);color:var(--st-bg);display:flex;align-items:center;justify-content:center;border-radius:100px}
+.demo-7__mt .row{display:flex;justify-content:space-between;width:220px;height:28px;align-items:center;font-size:13px;border-bottom:1px solid var(--st-line)}
+.demo-7__mt .gone{opacity:0;transform:translateX(-4px)}
+.demo-7__mt .rest{transform:translateY(-28px)}
+.demo-7__mt .list{height:84px;overflow:hidden}
+</style>
+</head>
+<body>
+<input class="vh" type="radio" name="theme" id="theme-dark" checked>
+<input class="vh" type="radio" name="theme" id="theme-light">
+<div class="wrap">
+  <div class="theme-switch"><div class="seg"><label for="theme-dark">Dark</label><label for="theme-light">Light</label></div></div>
+
+  <header>
+    <div class="mono-label">Motion audit · design-motion-principles</div>
+    <h1 class="title">vigil — a beautiful instrument that moves like a screensaver</h1>
+    <p class="lede">Vigil is a Windows tray panel (WPF, .NET 10) for laptop health: CPU, RAM, disks, network, battery, keep-awake, displays. You open it many times a day for a one-second glance. This audit reads the motion through that frequency.</p>
+    <div class="meta-row"><span>Tray utility · productivity</span><span>WPF storyboards + code-behind (<code>Motion.cs</code>)</span><span>Weighting: Emil primary · Jakub secondary · Jhey selective</span></div>
+    <div class="stats">
+      <a class="stat" href="#rec-crit"><b>15</b><span>Findings</span></a>
+      <a class="stat" data-sev="crit" href="#rec-crit"><b>2</b><span>Critical</span></a>
+      <a class="stat" data-sev="imp" href="#rec-imp"><b>6</b><span>Important</span></a>
+      <a class="stat" data-sev="opp" href="#rec-opp"><b>7</b><span>Opportunities</span></a>
+    </div>
+  </header>
+
+  <section class="assessment">
+    <div class="mono-label">Overall</div>
+    <p>The engineering of the motion is excellent: one shared curve, a single gate for reduced motion that keeps fades and drops movement, loops that only run while visible, and animations that retarget instead of restarting. The problem is tempo. Almost everything runs 500–1400 ms on a slow-start curve, on a panel opened for a glance. Fully settling after open takes about a second, a tab change about 1.2 s, and live readings are mid-animation most of the time. Keep the craft and the restraint of the design doc; cut every duration to a third and drop the stagger.</p>
+  </section>
+
+  <section>
+    <div class="mono-label">01 · Lens summary</div>
+    <h2>Three lenses</h2>
+    <table class="lens-table">
+      <tr><th>Lens</th><th>Verdict</th><th>One-line read</th></tr>
+      <tr><td>Emil Kowalski <span class="chip">Primary</span></td><td><span class="dot crit"></span>Problem</td><td>Right motions, wrong speed: open, tab change and readings are 2–5× too slow for something opened tens of times a day, and keyboard tab changes animate.</td></tr>
+      <tr><td>Jakub Krehel <span class="chip">Secondary</span></td><td><span class="dot imp"></span>Mixed</td><td>Subtle distances (4–6 px), no bounce, quiet palette: strong. Exits as long as enters, a breathing status ring and instant disclosures cost polish.</td></tr>
+      <tr><td>Jhey Tompkins <span class="chip">Selective</span></td><td><span class="dot opp"></span>Strong</td><td>The blinking wordmark eye and traffic dots that fall or climb with the rate are real character. One moment (keep-awake starting) could earn more.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="mono-label">02 · Where the timings land</div>
+    <h2>Duration budget</h2>
+    <div class="timing-figure">
+      <svg viewBox="0 0 660 300" role="img" aria-label="Animation durations plotted on a 0 to 1500 millisecond scale">
+        <rect class="tz-good" x="40" y="20" width="40" height="240"/>
+        <rect class="tz-good" x="80" y="20" width="80" height="240"/>
+        <rect class="tz-mid" x="160" y="20" width="80" height="240"/>
+        <rect class="tz-slow" x="240" y="20" width="400" height="240"/>
+        <text class="tz-lab" x="44" y="14">instant</text><text class="tz-lab" x="88" y="14">responsive</text><text class="tz-lab" x="166" y="14">deliberate</text><text class="tz-lab" x="250" y="14">sluggish (500 ms+)</text>
+        <g class="tick"><line x1="40" y1="260" x2="640" y2="260"/></g>
+        <text class="tz-lab" x="36" y="278">0</text><text class="tz-lab" x="146" y="278">300</text><text class="tz-lab" x="226" y="278">500</text><text class="tz-lab" x="300" y="278">750</text><text class="tz-lab" x="390" y="278">1000</text><text class="tz-lab" x="590" y="278">1500 ms</text>
+        <!-- x = 40 + ms*0.4 -->
+        <circle class="pt-good" cx="96" cy="230" r="9"/><text class="pt-num" x="96" y="233.5" text-anchor="middle">1</text>
+        <circle class="pt-good" cx="120" cy="205" r="9"/><text class="pt-num" x="120" y="208.5" text-anchor="middle">2</text>
+        <circle class="pt-mid" cx="200" cy="230" r="9"/><text class="pt-num" x="200" y="233.5" text-anchor="middle">3</text>
+        <circle class="pt-mid" cx="220" cy="180" r="9"/><text class="pt-num" x="220" y="183.5" text-anchor="middle">4</text>
+        <circle class="pt-slow" cx="240" cy="205" r="9"/><text class="pt-num" x="240" y="208.5" text-anchor="middle">5</text>
+        <circle class="pt-slow" cx="260" cy="155" r="9"/><text class="pt-num" x="260" y="158.5" text-anchor="middle">6</text>
+        <circle class="pt-slow" cx="240" cy="130" r="9"/><text class="pt-num" x="240" y="133.5" text-anchor="middle">7</text>
+        <circle class="pt-slow" cx="340" cy="230" r="9"/><text class="pt-num" x="340" y="233.5" text-anchor="middle">8</text>
+        <circle class="pt-slow" cx="390" cy="205" r="9"/><text class="pt-num" x="390" y="208.5" text-anchor="middle">9</text>
+        <circle class="pt-slow" cx="360" cy="180" r="9"/><text class="pt-num" x="360" y="183.5" text-anchor="middle">10</text>
+        <circle class="pt-slow" cx="360" cy="155" r="9"/><text class="pt-num" x="360" y="158.5" text-anchor="middle">11</text>
+        <circle class="pt-slow" cx="420" cy="130" r="9"/><text class="pt-num" x="420" y="133.5" text-anchor="middle">12</text>
+        <circle class="pt-slow" cx="590" cy="230" r="9"/><text class="pt-num" x="590" y="233.5" text-anchor="middle">13</text>
+        <circle class="pt-slow" cx="520" cy="205" r="9"/><text class="pt-num" x="520" y="208.5" text-anchor="middle">14</text>
+        <circle cx="40" cy="80" r="9" fill="none" stroke="var(--muted)" stroke-dasharray="3 2"/><text class="tz-lab" x="54" y="84">15 · Options / Alerts / Until expand (no transition)</text>
+      </svg>
+      <ul class="key">
+        <li><b>1</b>Press scale (buttons, chips, tabs)<span class="ms">140</span></li>
+        <li><b>2</b>Switch knob / track<span class="ms">200</span></li>
+        <li><b>3</b>Panel open (shell)<span class="ms">400</span></li>
+        <li><b>4</b>End armed → red<span class="ms">450</span></li>
+        <li><b>5</b>Rolling digits (every 1 s)<span class="ms">500</span></li>
+        <li><b>6</b>Tab page slide-in<span class="ms">500</span></li>
+        <li><b>7</b>Ended process row exit<span class="ms">500</span></li>
+        <li><b>8</b>Tab dot travel + 2.4× stretch<span class="ms">550</span></li>
+        <li><b>9</b>Section stagger, settles at<span class="ms">700–1050</span></li>
+        <li><b>10</b>Chip selected fill spread<span class="ms">750</span></li>
+        <li><b>11</b>RAM bar → amber<span class="ms">800</span></li>
+        <li><b>12</b>Process rows re-rank glide<span class="ms">800</span></li>
+        <li><b>13</b>Bars ease to value (every 1 s)<span class="ms">1400</span></li>
+        <li><b>14</b>Dot field column slide<span class="ms">950</span></li>
+        <li><b>15</b>Disclosures<span class="ms">0</span></li>
+      </ul>
+      <div class="off"><b>What's off:</b> only press and switch land in the responsive zone. Twelve of fifteen sit past 500 ms, including the three things you see on every open (shell, stagger, readings). Bars at 1.4 s with a 1 s sample never settle, so the bar always shows a stale value on its way somewhere. Loops (eye blink 6–10 s, awake ring 4 s, colon 2 s, traffic 1.8–3.4 s, speed-test sweep 2.6 s) are not plotted.</div>
+    </div>
+  </section>
+
+  <!-- ───────── Emil ───────── -->
+  <section class="lens-sec">
+    <div class="lens-sec__head"><h3>Emil Kowalski — Restraint &amp; Speed</h3><span class="chip">Primary</span></div>
+    <p class="lens-sec__verdict"><span class="dot crit"></span>Problem. The motion you chose is purposeful; the tempo is wrong for a glance-and-go panel.</p>
+
+    <div class="lens-block"><span class="mono-label">What's working well</span>
+      <ul class="lens-list good">
+        <li>Close is instant (<code>Hide()</code> on Esc and on deactivate). Exactly right for a flyout. <code>PanelWindow.xaml.cs:52</code></li>
+        <li>Press feedback: scale .97, 140 ms, strong exponential ease-out on every button, chip and tab. Textbook. <code>PanelWindow.xaml:48</code></li>
+        <li>Switch knob 200 ms, track colour 180 ms. In budget.</li>
+        <li><code>BeginAnimation</code> from the current value retargets mid-flight instead of restarting, and the traffic lanes change speed through <code>SpeedRatio</code> so they never restart.</li>
+        <li>No bounce anywhere; distances are 4–6 px.</li>
+      </ul>
+    </div>
+
+    <div class="lens-block"><span class="mono-label">Issues to address</span>
+
+      <div class="finding-row" data-sev="crit">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag crit">Critical</span><span class="tag">Emil</span><span class="tag">Jakub</span></div>
+          <h4 class="find-title">Every open takes about a second to settle</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>The shell fades and rises over 400 ms, then each section of the page fades and rises over 700 ms, 70 ms apart. A page with five sections finishes at about 1 s. This runs on every open, and the same stagger runs again on every tab change.</p>
+            <p><span class="label">Why it matters</span>The panel is opened tens of times a day to read one number. The reading you came for is at partial opacity for most of a second. Two lists with stagger in the same view is also the stagger-spam tell.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Shell: opacity 0→1 plus 4 px rise, 160 ms, strong ease-out. Drop <code>RevealSections</code> entirely; content arrives with the shell.</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:101–141</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st1" id="st1-a" checked><input class="vh" type="radio" name="st1" id="st1-l"><input class="vh" type="radio" name="st1" id="st1-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Panel open, no stagger</span><span class="demo__timing">160ms · cubic-bezier(.23,1,.32,1)</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st1-a">Auto</label><label for="st1-l">Light</label><label for="st1-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-1__mt"><div class="ui-card"><div class="ui-label" style="margin-bottom:8px">System</div><div class="ui-row" style="justify-content:space-between"><span>CPU</span><span class="ui-num" style="font-size:20px">12%</span></div><div class="ui-row" style="justify-content:space-between;margin-top:6px"><span>Memory</span><span class="ui-num" style="font-size:20px">58%</span></div></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="crit">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag crit">Critical</span><span class="tag">Emil</span></div>
+          <h4 class="find-title">Tab change is slow and animates from the keyboard too</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>The cobalt dot travels 550 ms and stretches to 2.4× wide at the halfway point; the page slides 5 px over 500 ms, then the section stagger runs again. <code>Tab_Checked</code> plays all of it whether the tab was clicked or chosen with the arrow keys.</p>
+            <p><span class="label">Why it matters</span>Tabs are the most frequent action inside the panel. Keyboard-initiated changes should never animate, and a 2.4× stretch makes the dot itself the thing you notice.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Dot: translate only, 200 ms strong ease-out (stretch at most 1.3×, or none). Page: 150 ms opacity crossfade, no slide, no stagger. Keyboard: set positions directly (check <code>InputManager.Current.MostRecentInputDevice is KeyboardDevice</code>).</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:144–172, 880–896</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st2" id="st2-a" checked><input class="vh" type="radio" name="st2" id="st2-l"><input class="vh" type="radio" name="st2" id="st2-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Quick tab: dot + crossfade</span><span class="demo__timing">200ms dot · 150ms fade</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st2-a">Auto</label><label for="st2-l">Light</label><label for="st2-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-2__mt"><div class="ui-tabs"><div class="ui-tab">◐</div><div class="ui-tab">▭</div><div class="ui-tab">≋</div><div class="ui-tab">☰</div><div class="ui-tabdot"></div></div><div class="pages"><div class="pa">Keep awake · indefinitely</div><div class="pb">Processes · by CPU</div></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Emil</span><span class="tag">Jakub</span></div>
+          <h4 class="find-title">Live readings and bars are always mid-animation</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>Values sample every 1 s. Changed digits rise 30 % of a line and fade in over 500 ms; bars ease over 1.4 s. Busy readings are animating half the time and bars never reach their value before the next one arrives.</p>
+            <p><span class="label">Why it matters</span>An instrument should be readable at a glance. A bar that is always gliding shows a value from up to a second ago, and moving digits are harder to read than still ones.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Digits: 180 ms, 15 % of a line, strong ease-out. Bars: 300 ms strong ease-out (keep "first value after showing is set directly"). RAM colour change: 200 ms.</p></div>
+            <p class="find-loc"><code>RollingText.cs:70</code> · <code>PanelWindow.xaml.cs:262–296</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st3" id="st3-a" checked><input class="vh" type="radio" name="st3" id="st3-l"><input class="vh" type="radio" name="st3" id="st3-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Reading lands, then rests</span><span class="demo__timing">180ms digits · 300ms bar · ease-out</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st3-a">Auto</label><label for="st3-l">Light</label><label for="st3-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-4__mt"><div class="ui-row" style="gap:16px"><span>CPU</span><div class="ui-bar"><i style="transform:scaleX(.61)"></i></div><span class="ui-num" style="font-size:20px">6<span class="roll">1</span>%</span></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Emil</span></div>
+          <h4 class="find-title">One slow-start curve for everything, including enters</h4>
+          <div class="find-body">
+            <p><span class="label">What</span><code>Motion.Soft</code> is <code>cubic-bezier(.45,.05,.25,1)</code>, an ease-in-out whose first control point (x .45, y .05) makes the first ~30 % of every animation almost stationary. It drives enters, feedback and on-screen moves alike.</p>
+            <p><span class="label">Why it matters</span>A slow start is exactly the moment the eye is watching. Enters and feedback on this curve feel late even before you shorten them; at 500–700 ms the effect doubles.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Add <code>Motion.Out = (.23,1,.32,1)</code> for enters, feedback, readings and bars. Keep <code>Soft</code> only for things travelling on screen (dot-field slide, rows re-ranking). Update DESIGN.md's "one curve" rule to two.</p></div>
+            <p class="find-loc"><code>Motion.cs:20</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st4" id="st4-a" checked><input class="vh" type="radio" name="st4" id="st4-l"><input class="vh" type="radio" name="st4" id="st4-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Ease-out (left) vs Soft (right)</span><span class="demo__timing">240ms each · same distance</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st4-a">Auto</label><label for="st4-l">Light</label><label for="st4-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-5__mt" style="display:flex;gap:24px"><div class="ui-card fast" style="min-width:120px"><div class="ui-label">Out</div><div class="ui-num">24%</div></div><div class="ui-card soft" style="min-width:120px"><div class="ui-label">Soft</div><div class="ui-num">24%</div></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Emil</span></div>
+          <h4 class="find-title">Feedback that should be instant takes most of a second</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>Selecting a chip spreads the white fill from the click point over 750 ms; arming End fades to red over 450 ms.</p>
+            <p><span class="label">Why it matters</span>Origin-aware fill is a great idea, but it is a response to a click. At 750 ms the user's eye has already moved on before the chip says "selected". The armed red state is a warning and must read immediately.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Chip fill: 240 ms strong ease-out from the click point. End armed: 150 ms colour change; keep the 3 s drain line, which is purposeful.</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:303–316, 581–612</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st5" id="st5-a" checked><input class="vh" type="radio" name="st5" id="st5-l"><input class="vh" type="radio" name="st5" id="st5-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Chip fill from the click point</span><span class="demo__timing">240ms · cubic-bezier(.23,1,.32,1)</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st5-a">Auto</label><label for="st5-l">Light</label><label for="st5-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-6__mt" style="display:flex;gap:8px"><span class="ui-chip">30m</span><span class="ui-chip">1h<span class="fill">1h</span></span><span class="ui-chip">2h</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lens-block"><span class="mono-label">Opportunities</span>
+      <ul class="lens-list opp">
+        <li>Under Windows "Show animations" off, the panel open still fades 400 ms (fades are kept). Fine in principle; at 160 ms it becomes a non-issue. <code>Motion.cs:16</code></li>
+        <li>Dot field: 950 ms slide per 1 s sample means the field is permanently moving. Consider 300 ms, or only the new column lighting (no slide). <code>DotMatrix.cs:21</code></li>
+      </ul>
+    </div>
+    <p class="lens-take">Through Emil's lens: the restraint is real (instant close, no bounce, tiny distances, a reduced-motion gate), but restraint also means speed. Divide every duration by about three and the panel will feel as fast as it actually is.</p>
+  </section>
+
+  <!-- ───────── Jakub ───────── -->
+  <section class="lens-sec">
+    <div class="lens-sec__head"><h3>Jakub Krehel — Production Polish</h3><span class="chip">Secondary</span></div>
+    <p class="lens-sec__verdict"><span class="dot imp"></span>Mixed. Quiet and consistent; a few spots draw attention to themselves or snap.</p>
+
+    <div class="lens-block"><span class="mono-label">What's working well</span>
+      <ul class="lens-list good">
+        <li>Reduced motion is handled properly: <code>Motion.Enabled</code> follows Windows "Show animations", movement and loops stop, comprehension fades stay. Better than most web apps. <code>Motion.cs:13–17</code></li>
+        <li>Loops run only while the panel is visible and their element is on screen (<code>SetAmbient</code>), which also protects the 1 % CPU budget.</li>
+        <li>Only digits that changed move (<code>RollingText</code>), and all numbers are Geist Mono, so nothing shifts width.</li>
+        <li>Bars set the first value directly after showing, so nothing sweeps from stale data.</li>
+        <li><code>Motion.Off</code> for the self-test gives deterministic screenshots.</li>
+      </ul>
+    </div>
+
+    <div class="lens-block"><span class="mono-label">Issues to address</span>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Jakub</span><span class="tag">Emil</span></div>
+          <h4 class="find-title">Breathing ring on the awake dot (plus a breathing colon)</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>While keep-awake holds, a ring around the green header dot scales 1→2.6× and fades, forever, every 4 s. On the Keep awake tab the countdown colon also fades to 45 % and back every 2 s.</p>
+            <p><span class="label">Why it matters</span>A looping pulse on a status dot is the most recognisable AI-slop motion pattern. The dot already says "awake"; the loop adds attention, not information, and two loops on one page compete.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Play one ring (≈600 ms, ease-out) when keep-awake starts, then keep the dot still. Make the colon static, or tick it once per second (a clock does, a breath doesn't).</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:193–207</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st6" id="st6-a" checked><input class="vh" type="radio" name="st6" id="st6-l"><input class="vh" type="radio" name="st6" id="st6-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">One ring on change, then still</span><span class="demo__timing">600ms once · ease-out</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st6-a">Auto</label><label for="st6-l">Light</label><label for="st6-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-3__mt"><span class="d"><i class="ring"></i><i></i></span><span class="ui-row">Awake · 1:42 left</span></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Jakub</span></div>
+          <h4 class="find-title">Exits as long as enters; re-rank glide is slow</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>An ended app's row fades out and slides 6 px left over 500 ms, the same weight as a row arriving. Rows gliding to a new rank take 800 ms, every 2 s sample.</p>
+            <p><span class="label">Why it matters</span>The user is moving on after End; the exit should get out of the way. An 800 ms glide on a 2 s refresh means the list is in motion 40 % of the time, which makes it hard to aim at the next row.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Exit: 200 ms, 4 px, ease-out. Re-rank glide: 300 ms on <code>Soft</code>. New rows: 200 ms fade.</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:474–478, 644–660</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st7" id="st7-a" checked><input class="vh" type="radio" name="st7" id="st7-l"><input class="vh" type="radio" name="st7" id="st7-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Ended row leaves, rest close up</span><span class="demo__timing">200ms exit · 300ms glide</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st7-a">Auto</label><label for="st7-l">Light</label><label for="st7-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-7__mt"><div class="list"><div class="row gone"><span>chrome</span><span>41%</span></div><div class="rest"><div class="row"><span>Code</span><span>9%</span></div><div class="row"><span>OBS</span><span>6%</span></div></div></div></div></div>
+        </div>
+      </div>
+
+      <div class="finding-row" data-sev="imp">
+        <div class="finding-row__prose">
+          <div class="find-tags"><span class="tag imp">Important</span><span class="tag">Jakub</span></div>
+          <h4 class="find-title">Disclosures snap open (Options, Alerts, Until…)</h4>
+          <div class="find-body">
+            <p><span class="label">What</span>Options, the Alerts block and the Until row switch <code>Visibility</code> directly, and the chevron swaps glyph (› to ⌄). Everything below jumps down in one frame. These are the only unanimated state changes in a panel where everything else moves.</p>
+            <p><span class="label">Why it matters</span>In this panel the contrast makes them feel broken rather than snappy. A short fade lets the eye follow what appeared.</p>
+            <div class="fix"><p><span class="label">Recommended motion</span>Content: opacity 0→1 plus 4 px drop, 180 ms ease-out (no height animation needed in WPF). Chevron: one glyph rotated 90°, 180 ms. Close: instant or 120 ms fade.</p></div>
+            <p class="find-loc"><code>PanelWindow.xaml.cs:905, 960–961</code> · <code>AlertsView.xaml.cs:58</code></p>
+          </div>
+        </div>
+        <div class="demo">
+          <input class="vh" type="radio" name="st8" id="st8-a" checked><input class="vh" type="radio" name="st8" id="st8-l"><input class="vh" type="radio" name="st8" id="st8-d">
+          <div class="demo__bar"><div class="demo__meta"><span class="demo__title">Options disclosure</span><span class="demo__timing">180ms · ease-out</span></div>
+            <div class="demo__controls"><div class="seg"><label for="st8-a">Auto</label><label for="st8-l">Light</label><label for="st8-d">Dark</label></div><span class="demo__loop">↻</span></div></div>
+          <div class="demo__stage"><div class="demo-8__mt"><div class="ui-row"><span class="chev">›</span><span>Options</span></div><div class="body" style="margin-top:8px"><div class="ui-row" style="color:var(--st-dim)">Keep display on</div><div class="ui-row" style="color:var(--st-dim);margin-top:4px">Only when plugged in</div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lens-block"><span class="mono-label">Opportunities</span>
+      <ul class="lens-list opp">
+        <li>Hover washes (<code>#0AFFFFFF</code>) on tabs, chips and links switch instantly. A 120 ms colour transition would match the rest of the panel's softness. <code>PanelWindow.xaml:144, 235, 297</code></li>
+        <li>Speed-test sweep (2.6 s loop) is good state indication while running; make sure it stops on cancel and on panel hide (it is outside <code>SetAmbient</code>). <code>SpeedTestView.xaml.cs</code></li>
+      </ul>
+    </div>
+    <p class="lens-take">Through Jakub's lens: this is already more considered than most production apps (reduced motion, visibility gating, width-stable numerals). Remove the breathing loops, make exits lighter than enters, and give the three disclosures the same quiet fade as everything else.</p>
+  </section>
+
+  <!-- ───────── Jhey ───────── -->
+  <section class="lens-sec">
+    <div class="lens-sec__head"><h3>Jhey Tompkins — Experimentation &amp; Delight</h3><span class="chip">Selective</span></div>
+    <p class="lens-sec__verdict"><span class="dot opp"></span>Strong where it counts. The character comes from data, not decoration.</p>
+    <div class="lens-block"><span class="mono-label">What's working well</span>
+      <ul class="lens-list good">
+        <li>The wordmark's i-dot is an eye that blinks every 10 s, and every 6 s while holding the PC awake: brand, name and state in one tiny motion. Keep it.</li>
+        <li>Traffic dots fall for download and climb for upload, speed following the rate and hidden when idle. Motion as data.</li>
+        <li>The End drain line shows the 3 s arming window without a number.</li>
+      </ul>
+    </div>
+    <div class="lens-block"><span class="mono-label">Opportunities</span>
+      <ul class="lens-list opp">
+        <li>Keep-awake starting is a rare, meaningful moment: let the eye "open" once (scaleY .15→1, 300 ms) instead of looping the header ring.</li>
+        <li>Battery-over-time (proposed for v0.4) could draw its trend line once on first view with a clip-path reveal, then stay still.</li>
+        <li>Charging: a single slow fill sweep on the battery bar when the charger is plugged in (event-driven, not looped).</li>
+      </ul>
+    </div>
+    <p class="lens-take">Through Jhey's lens: Vigil's personality lives in tiny, meaningful motions (eye, traffic, drain). Spend delight on rare state changes such as plugging in or starting keep-awake, never on things that repeat every second.</p>
+  </section>
+
+  <!-- ───────── Recommendations ───────── -->
+  <section>
+    <div class="mono-label">06 · Combined recommendations</div>
+    <h2>What to change</h2>
+    <div class="tier-label" id="rec-crit"><span class="mono-label">Critical · must fix</span><hr><span class="n">2</span></div>
+    <table><tr><th>Issue</th><th>File</th><th>Fix</th></tr>
+      <tr><td>Open takes ~1 s to settle (400 ms shell + 700 ms staggered sections)</td><td><code>PanelWindow.xaml.cs:101–141</code></td><td>160 ms shell fade + 4 px, strong ease-out; delete section stagger</td></tr>
+      <tr><td>Tab change 550 ms dot + 2.4× stretch + 500 ms page + stagger; animates from keyboard</td><td><code>PanelWindow.xaml.cs:144–172, 880–896</code></td><td>200 ms dot translate, 150 ms crossfade, no stagger; no animation for keyboard input</td></tr>
+    </table>
+    <div class="tier-label" id="rec-imp"><span class="mono-label">Important · should fix</span><hr><span class="n">6</span></div>
+    <table><tr><th>Issue</th><th>File</th><th>Fix</th></tr>
+      <tr><td>Readings 500 ms, bars 1.4 s on a 1 s sample</td><td><code>RollingText.cs:70</code>, <code>PanelWindow.xaml.cs:262–296</code></td><td>Digits 180 ms / 15 % rise; bars 300 ms; RAM colour 200 ms</td></tr>
+      <tr><td>Slow-start curve on enters and feedback</td><td><code>Motion.cs:20</code></td><td>Add <code>Motion.Out (.23,1,.32,1)</code>; keep <code>Soft</code> for travel only</td></tr>
+      <tr><td>Chip fill 750 ms; End armed 450 ms</td><td><code>PanelWindow.xaml.cs:303–316, 581–612</code></td><td>240 ms and 150 ms</td></tr>
+      <tr><td>Looping ring on awake dot; breathing colon</td><td><code>PanelWindow.xaml.cs:193–207</code></td><td>One ring on start; static or 1 Hz tick colon</td></tr>
+      <tr><td>Row exit 500 ms; re-rank 800 ms</td><td><code>PanelWindow.xaml.cs:474–478, 644–660</code></td><td>Exit 200 ms / 4 px; glide 300 ms</td></tr>
+      <tr><td>Options / Alerts / Until snap open</td><td><code>PanelWindow.xaml.cs:905, 960</code>, <code>AlertsView.xaml.cs:58</code></td><td>180 ms fade + 4 px; rotate chevron</td></tr>
+    </table>
+    <div class="tier-label" id="rec-opp"><span class="mono-label">Opportunities · could enhance</span><hr><span class="n">7</span></div>
+    <table><tr><th>Enhancement</th><th>Where</th><th>Impact</th></tr>
+      <tr><td>Dot field slide 950 ms → 300 ms or no slide</td><td><code>DotMatrix.cs:21</code></td><td>History stops looking permanently in motion</td></tr>
+      <tr><td>Reduced-motion open fade shortens with the 160 ms fix</td><td><code>Motion.cs:16</code></td><td>Calmer for motion-sensitive users</td></tr>
+      <tr><td>120 ms hover colour transitions</td><td><code>PanelWindow.xaml</code> templates</td><td>Matches the panel's softness</td></tr>
+      <tr><td>Stop the speed-test sweep on hide/cancel</td><td><code>SpeedTestView.xaml.cs</code></td><td>Keeps the "nothing moves unless shown" rule</td></tr>
+      <tr><td>Eye "opens" once when keep-awake starts</td><td>Header wordmark</td><td>Replaces the loop with a meaningful moment</td></tr>
+      <tr><td>Battery trend draws once on first view</td><td>v0.4 battery-over-time</td><td>Delight on a rare view</td></tr>
+      <tr><td>One fill sweep on plug-in</td><td>Battery bar</td><td>Event-driven confirmation</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <div class="mono-label">07 · Lens reference summary</div>
+    <h2>Which lens did the work</h2>
+    <div class="ref-summary">
+      <p><b>Emil</b> drove 5 of 8 findings: frequency and speed are the issue, not taste.</p>
+      <p><b>Jakub</b> supplied the reduced-motion and exit judgements and confirmed the strongest parts (gating, stable numerals, quiet distances).</p>
+      <p><b>Jhey</b> mostly endorsed what exists; his suggestions move delight from loops to rare events.</p>
+      <p>To lean differently: making Jakub primary would turn findings 1, 2 and 4 into Important rather than Critical (polish lens tolerates 300–500 ms), but the stagger and the breathing ring would still be flagged.</p>
+    </div>
+  </section>
+
+  <footer>vigil · motion audit 2026-11-23 · 2 critical · 6 important · 7 opportunities</footer>
+</div>
+</body>
+</html>
