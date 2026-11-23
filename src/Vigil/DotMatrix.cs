@@ -65,7 +65,7 @@ sealed class DotMatrix : FrameworkElement
 
         if (animate)
         {
-            Motion.FromTo(this, SlideProperty, 1, 0, SlideMs);
+            Motion.FromTo(this, SlideProperty, 1, 0, SlideMs, curve: Motion.Soft);
             BeginAnimation(RevealProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(RevealMs)));
         }
         else

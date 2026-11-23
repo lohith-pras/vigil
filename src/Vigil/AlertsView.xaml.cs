@@ -54,8 +54,6 @@ public partial class AlertsView : UserControl
 
     void Toggle_Click(object sender, RoutedEventArgs e)
     {
-        bool show = Body.Visibility != Visibility.Visible;
-        Body.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        Toggle.Content = (show ? "⌄  " : "›  ") + "Alerts";
+        Motion.Disclose(Toggle, Body, Body.Visibility != Visibility.Visible);
     }
 }

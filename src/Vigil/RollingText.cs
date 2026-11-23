@@ -9,7 +9,7 @@ namespace Vigil;
 
 /// <summary>
 /// A one-line text readout (drop-in for a numeric TextBlock) where only the characters that changed
-/// rise 30 % of a line into place and fade in, 500 ms on <see cref="Motion.Soft"/>. Static when motion is off.
+/// rise 15 % of a line into place and fade in, 180 ms on <see cref="Motion.Out"/>. Static when motion is off.
 /// </summary>
 sealed class RollingText : FrameworkElement
 {
@@ -67,7 +67,7 @@ sealed class RollingText : FrameworkElement
         var roll = new bool[now.Length];
         for (int i = 0; i < now.Length; i++) roll[i] = old.Length != now.Length || old[i] != now[i];
         _rolling = roll;
-        Motion.FromTo(this, ProgressProperty, 0, 1, 500);
+        Motion.FromTo(this, ProgressProperty, 0, 1, 180); // lands well before the next 1 s sample
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -109,7 +109,7 @@ sealed class RollingText : FrameworkElement
         var glyphs = Glyphs();
         double p = (double)GetValue(ProgressProperty);
         bool[]? roll = p < 1 ? _rolling : null;
-        double x = 0, rise = (1 - p) * 0.3 * _lineHeight;
+        double x = 0, rise = (1 - p) * 0.15 * _lineHeight;
         for (int i = 0; i < glyphs.Count; i++)
         {
             if (roll is not null && i < roll.Length && roll[i])

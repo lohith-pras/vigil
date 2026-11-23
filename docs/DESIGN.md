@@ -56,25 +56,26 @@ Selected chips are inverted (white fill, black text), not cobalt.
 
 ## Motion
 
-Slow and quiet: one curve for everything, `(.45, .05, .25, 1)` (`Motion.Soft`). Nothing overshoots, nothing travels more than a few px, and nothing moves unless a value changed. All of it runs only while the panel is visible. Code: `Motion.cs`, `RollingText.cs`.
+Quick and quiet. The panel is opened many times a day for a glance, so things land in under 300 ms and keyboard actions don't animate. Two curves: `Motion.Out` `(.23, 1, .32, 1)` for anything appearing and for feedback; `Motion.Soft` `(.45, .05, .25, 1)` only for things travelling on screen (dot field, rows re-ranking). Nothing overshoots, nothing travels more than a few px, nothing loops to draw attention, and nothing moves unless a value changed. All of it runs only while the panel is visible. Code: `Motion.cs`, `RollingText.cs`.
 
 | What | How |
 |---|---|
-| Panel open | 5 px rise + fade, 400 ms; sections of the page rise 4 px + fade, 700 ms, 70 ms apart |
+| Panel open | 4 px rise + fade, 160 ms, all at once (no stagger) |
 | Panel close | instant |
-| Tab change | dot travels 550 ms and stretches to 2.4x mid-way; page fades in, 5 px from the side it came from, 500 ms |
+| Tab change | dot slides 200 ms; page cross-fades 150 ms. Keyboard tab changes are instant |
 | Wordmark eye | the cobalt dot blinks every 10 s (every 6 s while keep-awake holds) |
-| Awake dot (header) | soft pulse every 4 s |
-| Readings | only the digits that changed slide up into place, 500 ms |
-| Countdown | rolling digits; the colon eases to 45 % and back every 2 s |
+| Awake dot (header) | one ring when keep-awake starts (600 ms), then still |
+| Readings | only the digits that changed rise 15 % of a line into place, 180 ms |
+| Countdown | rolling digits; colon static |
 | Dot field | slides one column per sample, 950 ms; the new column lights bottom-up, 600 ms per dot, 55 ms apart |
-| Bars | ease to the new value over 1.4 s; memory turns amber over 800 ms |
-| Chip selected | white fill spreads from the click point, 750 ms |
+| Bars | ease to the new value over 300 ms; memory turns amber over 200 ms |
+| Chip selected | white fill spreads from the click point, 240 ms |
 | Traffic | dots fall (download) / climb (upload); 3.4 s per pass down to 1.8 s at high rates; hidden when idle |
 | Speed test | cobalt hairline sweeps the results while running, 2.6 s per pass |
-| Process rows | glide to their new rank, 800 ms; an ended app fades out 6 px left, 500 ms |
-| End armed | fades to red over 450 ms; a line drains along the bottom for the 3 s it stays armed |
+| Process rows | glide to their new rank, 300 ms; new rows fade in 200 ms; an ended app fades out 4 px left, 200 ms |
+| End armed | turns red over 150 ms; a line drains along the bottom for the 3 s it stays armed |
 | Press (every button, chip, tab) | scale .97, 140 ms ease-out |
+| Disclosures (Options, Alerts, Until…) | open: fade + 4 px drop, 180 ms, chevron turns 90°; close: instant |
 | Switch | knob 200 ms in-out, track colour 180 ms |
 | "Show animations in Windows" off | fades only, nothing slides or loops |
 | Self-test (`Motion.Off`) | nothing animates, so screenshots are settled |
