@@ -16,7 +16,7 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Product>Vigil</Product>
     <!-- Security analyzers (CA2xxx/CA3xxx/CA5xxx) on top of the default rules; any CA warning fails the build. -->
     <AnalysisModeSecurity>All</AnalysisModeSecurity>
