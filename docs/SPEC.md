@@ -1,6 +1,6 @@
 # Vigil — spec
 
-Small, always-running Windows tray app. Exactly three features. Anything else is v2 and gets discussed first.
+Small, always-running Windows tray app: **a laptop instrument**. One glance answers "is my machine OK, and will it last?" (see Direction). New features get discussed first.
 
 Target machine: ASUS TUF Gaming A15 (FA506IV), Ryzen 7 4800H, RTX 2060, Windows x64. C: is nearly full: no caches or logs on disk beyond one tiny settings file.
 
@@ -37,7 +37,7 @@ Tray icon shows CPU % as a number (16×16 / 32×32, readable). Tooltip: one-line
 ## Non-goals
 
 - No CPU/GPU temperatures (needs a kernel driver that Defender flags).
-- No volume mixer, clipboard history, window snapping, app switcher, uninstaller, launcher.
+- No volume mixer, clipboard history, window snapping, app switcher, uninstaller, launcher. Vigil is not a general toolkit: PowerToys already is one.
 - No telemetry, no accounts. No background network calls (see update exception below).
 - No Electron.
 
@@ -220,3 +220,24 @@ GPU usage, per-core CPU grid, disk activity, memory-pressure pill, uptime: remov
 
 - **New look**, recorded in [DESIGN.md](DESIGN.md): zinc-black acrylic double-bezel panel, Geist + Geist Mono embedded, lowercase `vigil` wordmark, sliding cobalt tab dot, CPU history as a dot field, hatch headroom in bars, pill chips. One dark palette (the light theme is dropped: the design is dark-native).
 - **Automatic update check** (user request, changes the network rule): when "Check for updates automatically" is on (default), Vigil checks GitHub Releases 2 minutes after starting and then every 6 hours. A newer release it hasn't announced yet shows a Windows notification; clicking it opens the usual update prompt. Failures are silent. Network calls are now: this check, the manual check, and the speed test on click.
+
+## Direction (agreed 2026-11-22)
+
+**Vigil is a laptop instrument, not a toolkit.** PowerToys (free, signed, Microsoft) now covers keep-awake (Awake), DDC/CI displays (Power Display) and tray metrics (Command Palette Dock), so breadth is a race Vigil can't win. Vigil wins on what a module suite can't claim:
+
+- **One panel, one design, ≈10 MB.** Publish measured idle RAM/CPU; it's the headline.
+- **Depth on the laptop:** battery over time, smarter keep-awake, device batteries, plain-language health.
+- Hard rules unchanged: no admin, no driver, nothing sampled unless shown, no background network beyond the update check.
+
+A feature is in scope only if it makes the laptop's state clearer or keeps it working longer. Breadth features (mixer, clipboard, launcher, snapping) stay non-goals.
+
+Language: staying on .NET/WPF. A Rust port (est. 6–8 weeks part-time) buys a ~2–5 MB standalone exe instead of 148 MB, not RAM; revisit only if a macOS build is wanted.
+
+### v0.4 candidates (proposed, not agreed)
+
+1. **Battery over time:** keep one small health sample per day in `settings.json` (capped, e.g. 365 entries); show capacity trend ("−4 % this year") and "time to 20 % at current drain".
+2. **Smarter keep-awake triggers:** while a download/upload is running (network above a threshold), while the microphone is in use (call), while a presentation display is connected.
+3. **Device battery alerts:** low-battery notification for Bluetooth headphones/mouse, using the existing alert rules.
+4. **One-line verdict:** top of System tab says what's wrong in words ("Chrome is using 41 % CPU", "C: almost full"), built from data already sampled.
+
+Needs checking before proposing (likely need admin, which breaks the rules): per-app battery drain (SRUM), per-app bandwidth. Battery charge limit is vendor-only (ASUS/Lenovo WMI): optional per-brand add-on at most.
