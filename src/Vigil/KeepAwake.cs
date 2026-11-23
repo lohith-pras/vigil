@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.Win32;
 
@@ -168,8 +169,19 @@ sealed class Settings
 
     public static Settings Load()
     {
-        try { return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new(); }
+        try { return (JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new()).Sane(); }
         catch { return new(); } // missing or corrupt: defaults
+    }
+
+    /// <summary>Clamp a hand-edited or tampered file back into values the UI can produce.</summary>
+    internal Settings Sane()
+    {
+        if (ChargeLimit is not (80 or 90 or 100)) ChargeLimit = 100;
+        WatchApps = (WatchApps ?? new())
+            .Where(n => !string.IsNullOrWhiteSpace(n) && n.Length <= 260 && n.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(32).ToList();
+        if (AnnouncedVersion is { Length: > 32 }) AnnouncedVersion = null;
+        return this;
     }
 
     public void Save()

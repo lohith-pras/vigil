@@ -16,7 +16,7 @@ record Release(Version Version, string Tag, string PageUrl, string AssetName, st
 /// <summary>
 /// "Check for updates": the only network call Vigil makes, and only when the user clicks it.
 /// Reads the latest GitHub release, downloads the matching exe next to the running one, verifies
-/// size + SHA-256, swaps the files (Windows allows renaming a running exe) and restarts.
+/// source URL, size + SHA-256 (refuses a release without one), swaps the files (Windows allows renaming a running exe) and restarts.
 /// </summary>
 static class Updater
 {
@@ -70,9 +70,22 @@ static class Updater
         return null;
     }
 
+    const string AssetPrefix = "https://github.com/" + Repo + "/releases/download/";
+    const long MaxSize = 300L * 1024 * 1024; // standalone exe is ~150 MB
+
+    /// <summary>Why this release must not be installed, or null if it may. Fails closed: no checksum, no install.</summary>
+    internal static string? Problem(Release r) =>
+        !r.AssetUrl.StartsWith(AssetPrefix, StringComparison.Ordinal) || r.AssetUrl.Contains("..")
+            ? "The download link isn't a Vigil release on GitHub."
+        : r.Size is <= 0 or > MaxSize ? "The release file has an unexpected size."
+        : r.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)
+            ? "The release has no checksum to verify the download against."
+        : null;
+
     /// <summary>Download, verify, swap, start the new exe. Caller quits right after.</summary>
     public static async Task InstallAsync(Release r)
     {
+        if (Problem(r) is { } problem) throw new IOException(problem);
         string exe = ExePath, fresh = exe + ".new", old = exe + ".old";
         TryDelete(fresh);
 
@@ -89,16 +102,13 @@ static class Updater
             TryDelete(fresh);
             throw new IOException($"Download incomplete ({info.Length} of {r.Size} bytes).");
         }
-        if (r.Sha256 is { } expected)
+        string actual;
+        await using (var f = File.OpenRead(fresh))
+            actual = Convert.ToHexString(await SHA256.HashDataAsync(f));
+        if (!actual.Equals(r.Sha256, StringComparison.OrdinalIgnoreCase))
         {
-            await using var f = File.OpenRead(fresh);
-            string actual = Convert.ToHexString(await SHA256.HashDataAsync(f));
-            if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
-            {
-                f.Close();
-                TryDelete(fresh);
-                throw new IOException("Downloaded file doesn't match the release checksum.");
-            }
+            TryDelete(fresh);
+            throw new IOException("Downloaded file doesn't match the release checksum.");
         }
 
         // Swap: running exe -> .old (allowed while running), new -> exe. Roll back if the second step fails.
